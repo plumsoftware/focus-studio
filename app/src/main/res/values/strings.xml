@@ -9,4 +9,30 @@
     <string name="badge_4k">4K RAW</string>
     <string name="badge_60fps">60 FPS</string>
     <string name="badge_logc">LOG-C</string>
+
+    <!-- Фото редактор -->
+    <string name="btn_cancel">Отмена</string>
+    <string name="btn_export">Экспорт</string>
+    <string name="btn_reset_all">Сбросить все</string>
+
+    <string name="label_settings">Настройки</string>
+    <string name="label_transformation">Трансформация</string>
+    <string name="label_filters_grade">Фильтры грейд</string>
+
+    <string name="param_brightness">Яркость</string>
+    <string name="param_contrast">Контраст</string>
+    <string name="param_saturation">Насыщенность</string>
+    <string name="param_hue">Цветовой тон</string>
+    <string name="param_blur">Размытие</string>
+    <string name="param_skew_x">Искажение X</string>
+    <string name="param_skew_y">Искажение Y</string>
+    <string name="param_scale_x">Масштаб X</string>
+    <string name="param_scale_y">Масштаб Y</string>
+
+    <string name="filter_none">Нет</string>
+    <string name="filter_vintage">Винтаж</string>
+    <string name="filter_noir">Нуар</string>
+    <string name="filter_cinema">Кино</string>
+
+
 </resources>

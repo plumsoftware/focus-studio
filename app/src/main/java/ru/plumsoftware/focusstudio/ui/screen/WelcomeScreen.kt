@@ -1,8 +1,10 @@
 package ru.plumsoftware.focusstudio.ui.screen
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,14 +44,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import ru.plumsoftware.focusstudio.R
-import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.Routes
-import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
-import ru.plumsoftware.focusstudio.ui.theme.iOSPurple
 
 @Composable
 fun WelcomeScreen(navController: NavController) {
+
+    // Лаунчер для выбора фото
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val encodedUri = Uri.encode(uri.toString())
+            navController.navigate("${Routes.PHOTO_EDITOR}/$encodedUri")
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,7 +128,9 @@ fun WelcomeScreen(navController: NavController) {
                 desc = stringResource(R.string.photo_desc),
                 icon = Icons.Default.Image,
                 iconColor = MaterialTheme.colorScheme.secondary,
-                onClick = { navController.navigate(Routes.PHOTO_EDITOR) }
+                onClick = {
+                    photoPickerLauncher.launch("image/*")
+                }
             )
         }
 

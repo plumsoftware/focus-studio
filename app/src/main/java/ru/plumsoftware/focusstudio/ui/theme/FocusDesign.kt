@@ -18,9 +18,20 @@ object FocusDesign {
     val techUnderlineWidth = 24.dp
     val techUnderlineHeight = 2.dp
 
-    // Скругления (дублируем в Shapes для MaterialTheme)
+    // Новые размеры для редактора
+    val editorPanelWidth = 320.dp
+    val topBarHeight = 64.dp
+    val floatingToolbarHeight = 54.dp
+    val filterItemSize = 80.dp
+    val sliderHeight = 44.dp
+
+    // Скругления
     val cornerExtraSmall = 8.dp
     val cornerMedium = 16.dp
-    val cornerLarge = 28.dp // Для карточек
-    val cornerFull = 100.dp // Для кнопок и переключателей
+    val cornerLarge = 28.dp
+    val cornerFull = 100.dp
+
+    val bottomPanelHeight = 320.dp // Высота зоны инструментов
+    val sliderThumbSize = 20.dp
+    val sliderTrackHeight = 4.dp
 }
