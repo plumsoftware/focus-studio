@@ -1,3 +1,12 @@
 <resources>
-    <string name="app_name">Фокус</string>
+    <string name="app_name">Фокус студио</string>
+    <string name="prof_studio">ПРОФЕССИОНАЛЬНАЯ СТУДИЯ</string>
+    <string name="subtitle">Профессиональный фото и видео редактор. Студийное качество прямо в смартфоне.</string>
+    <string name="video_title">ВИДЕО</string>
+    <string name="video_desc">Редактируйте фильмы, добавляйте переходы и эффекты</string>
+    <string name="photo_title">ФОТО</string>
+    <string name="photo_desc">Улучшайте фото с помощью студийных фильтров</string>
+    <string name="badge_4k">4K RAW</string>
+    <string name="badge_60fps">60 FPS</string>
+    <string name="badge_logc">LOG-C</string>
 </resources>
