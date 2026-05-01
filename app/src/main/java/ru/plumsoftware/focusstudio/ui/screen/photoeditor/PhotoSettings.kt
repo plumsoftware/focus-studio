@@ -5,11 +5,13 @@ import androidx.compose.ui.graphics.ColorFilter
 
 data class PhotoSettings(
     val brightness: Float = 0f,    // -100..100
-    val contrast: Float = 1f,      // 0.5..1.5
+    val contrast: Float = 0f,      // -100..100 (теперь сырое)
     val saturation: Float = 1f,    // 0..2
-    val skewX: Float = 0f,         // -0.5..0.5
+    val skewX: Float = 0f,
     val selectedFilter: ColorMatrix? = null,
-    val filterName: String = "None"
+    val filterName: String = "None",
+    val aspectRatio: Float? = null, // null = свободная форма
+    val isCropMode: Boolean = false
 )
 
 // Цветовые матрицы для фильтров

@@ -33,6 +33,7 @@
     <string name="filter_vintage">Винтаж</string>
     <string name="filter_noir">Нуар</string>
     <string name="filter_cinema">Кино</string>
+    <string name="label_crop">Кадрировать</string>
 
 
 </resources>

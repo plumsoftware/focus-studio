@@ -29,22 +29,21 @@ fun ColorMatrix.concat(second: ColorMatrix) {
 }
 
 fun getCombinedMatrix(settings: PhotoSettings): ColorMatrix {
-    val result = ColorMatrix() // Identity по умолчанию
+    val result = ColorMatrix()
 
-    // 1. Применяем фильтр
     settings.selectedFilter?.let { result.concat(it) }
 
-    // 2. Применяем насыщенность
     val satMatrix = ColorMatrix().apply { setToSaturation(settings.saturation) }
     result.concat(satMatrix)
 
-    // 3. Применяем яркость и контраст
-    val c = settings.contrast
+    // Контраст: мапим -100..100 в коэффициент 0.5..1.5
+    val contrastScale = 1f + (settings.contrast / 200f)
     val b = settings.brightness
+
     val contrastMatrix = ColorMatrix(floatArrayOf(
-        c, 0f, 0f, 0f, b,
-        0f, c, 0f, 0f, b,
-        0f, 0f, c, 0f, b,
+        contrastScale, 0f, 0f, 0f, b,
+        0f, contrastScale, 0f, 0f, b,
+        0f, 0f, contrastScale, 0f, b,
         0f, 0f, 0f, 1f, 0f
     ))
     result.concat(contrastMatrix)

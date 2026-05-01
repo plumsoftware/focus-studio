@@ -34,4 +34,5 @@ object FocusDesign {
     val bottomPanelHeight = 320.dp // Высота зоны инструментов
     val sliderThumbSize = 20.dp
     val sliderTrackHeight = 4.dp
+    val cropIconSize = 48.dp
 }

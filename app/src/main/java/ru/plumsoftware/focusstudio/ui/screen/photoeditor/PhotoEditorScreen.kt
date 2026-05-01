@@ -32,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Undo
@@ -85,6 +86,8 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     val history = remember { mutableStateListOf(PhotoSettings()) }
     var currentIndex by remember { mutableIntStateOf(0) }
 
+    var isCropMode by remember { mutableStateOf(false) }
+
     val currentSettings = history[currentIndex]
 
     // Получение имени файла
@@ -117,124 +120,167 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
 
     Scaffold(
         topBar = {
-            EditorTopBar(
-                fileName = fileName,
-                onCancel = onCancel,
-                onExport = { /* Export logic */ }
-            )
+            EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {})
         },
         containerColor = Color.Black
     ) { padding ->
-        Column(modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()) {
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
 
-            // ХОЛСТ С ФОТО
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = photoUri,
-                    contentDescription = null,
-                    colorFilter = ColorFilter.colorMatrix(getCombinedMatrix(currentSettings)),
+            // ХОЛСТ
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
                     modifier = Modifier
-                        .fillMaxHeight(0.8f)
                         .padding(FocusDesign.paddingMedium)
-                        .graphicsLayer {
-                            // РЕАЛЬНОЕ ИСКАЖЕНИЕ (SKEW)
-                            // В Compose нет прямого skewX, используем матрицу через renderEffect или упрощенно rotationY для 3D искажения
-                            rotationY = currentSettings.skewX * 50f
-                            clip = true
-                            shape = RoundedCornerShape(FocusDesign.cornerExtraSmall)
-                        }
-                )
-
-                // UNDO / REDO ПАНЕЛЬ
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = FocusDesign.paddingLarge)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(0.6f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .then(
+                            // ПРИМЕНЕНИЕ ОБРЕЗКИ (Aspect Ratio)
+                            if (currentSettings.aspectRatio != null)
+                                Modifier.aspectRatio(currentSettings.aspectRatio!!)
+                            else Modifier.fillMaxHeight(0.8f)
+                        )
+                        .clip(RoundedCornerShape(if (isCropMode) 0.dp else FocusDesign.cornerExtraSmall))
+                        .border(
+                            width = if (isCropMode) 2.dp else 0.dp,
+                            color = if (isCropMode) Color.White else Color.Transparent
+                        )
                 ) {
-                    IconButton(
-                        onClick = { if (currentIndex > 0) currentIndex-- },
-                        enabled = currentIndex > 0
-                    ) {
-                        Icon(
-                            Icons.Default.Undo,
-                            null,
-                            tint = if (currentIndex > 0) Color.White else Color.Gray
-                        )
-                    }
-                    IconButton(
-                        onClick = { if (currentIndex < history.size - 1) currentIndex++ },
-                        enabled = currentIndex < history.size - 1
-                    ) {
-                        Icon(
-                            Icons.Default.Redo,
-                            null,
-                            tint = if (currentIndex < history.size - 1) Color.White else Color.Gray
-                        )
-                    }
+                    AsyncImage(
+                        model = photoUri,
+                        contentDescription = null,
+                        contentScale = if (currentSettings.aspectRatio != null) ContentScale.Crop else ContentScale.Fit,
+                        colorFilter = ColorFilter.colorMatrix(getCombinedMatrix(currentSettings)),
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
+
+                // Floating Toolbar с кнопкой обрезки
+                FloatingToolbar(
+                    onCropClick = { isCropMode = !isCropMode },
+                    isCropActive = isCropMode
+                )
             }
 
-            // ПАНЕЛЬ НАСТРОЕК
+            // ПАНЕЛЬ УПРАВЛЕНИЯ
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(FocusDesign.bottomPanelHeight),
+                modifier = Modifier.fillMaxWidth().height(FocusDesign.bottomPanelHeight),
                 color = DarkSurface,
-                shape = RoundedCornerShape(
-                    topStart = FocusDesign.cornerLarge,
-                    topEnd = FocusDesign.cornerLarge
-                )
+                shape = RoundedCornerShape(topStart = FocusDesign.cornerLarge, topEnd = FocusDesign.cornerLarge)
             ) {
-                Column(
-                    modifier = Modifier
-                        .padding(FocusDesign.paddingMedium)
-                        .verticalScroll(rememberScrollState())
-                ) {
+                Column(modifier = Modifier.padding(FocusDesign.paddingMedium)) {
+                    if (isCropMode) {
+                        // ЭКРАН ОБРЕЗКИ
+                        SectionTitle(stringResource(R.string.label_crop)) // Добавьте в strings
+                        AspectRatioRow { ratio ->
+                            updateSettings(currentSettings.copy(aspectRatio = ratio))
+                        }
+                    } else {
+                        // ЭКРАН НАСТРОЕК (Ваш существующий код слайдеров)
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            SectionTitle(stringResource(R.string.label_settings))
+                            FocusSlider(stringResource(R.string.param_brightness), currentSettings.brightness) {
+                                updateSettings(currentSettings.copy(brightness = it))
+                            }
+                            // ТЕПЕРЬ КОНТРАСТ БУДЕТ ДВИГАТЬСЯ ПЛАВНО
+                            FocusSlider(stringResource(R.string.param_contrast), currentSettings.contrast) {
+                                updateSettings(currentSettings.copy(contrast = it))
+                            }
 
-                    SectionTitle(stringResource(R.string.label_settings))
 
-                    FocusSlider(
-                        stringResource(R.string.param_brightness),
-                        currentSettings.brightness
-                    ) {
-                        updateSettings(currentSettings.copy(brightness = it))
-                    }
-                    FocusSlider(stringResource(R.string.param_contrast), currentSettings.contrast) {
-                        // Контраст обычно 0.5..1.5, мапим слайдер -100..100
-                        updateSettings(currentSettings.copy(contrast = 1f + (it / 200f)))
-                    }
+                            Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
 
-                    Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
+                            SectionTitle(stringResource(R.string.label_filters_grade))
+                            FilterRow(photoUri) { filterMatrix, name ->
+                                updateSettings(
+                                    currentSettings.copy(
+                                        selectedFilter = filterMatrix,
+                                        filterName = name
+                                    )
+                                )
+                            }
 
-                    SectionTitle(stringResource(R.string.label_filters_grade))
-                    FilterRow(photoUri) { filterMatrix, name ->
-                        updateSettings(
-                            currentSettings.copy(
-                                selectedFilter = filterMatrix,
-                                filterName = name
-                            )
-                        )
-                    }
-
-                    // Кнопка сброса
-                    TextButton(
-                        onClick = { updateSettings(PhotoSettings()) },
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    ) {
-                        Text(stringResource(R.string.btn_reset_all).uppercase(), color = AppleGray)
+                            // Кнопка сброса
+                            TextButton(
+                                onClick = { updateSettings(PhotoSettings()) },
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            ) {
+                                Text(
+                                    stringResource(R.string.btn_reset_all).uppercase(),
+                                    color = AppleGray
+                                )
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun AspectRatioRow(onRatioSelected: (Float?) -> Unit) {
+    val ratios = listOf(
+        "Свободно" to null,
+        "1:1" to 1f,
+        "3:4" to 3f/4f,
+        "4:3" to 4f/3f,
+        "16:9" to 16f/9f,
+        "9:16" to 9f/16f
+    )
+
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingMedium),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(ratios) { (label, value) ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(60.dp)
+                    .clickable { onRatioSelected(value) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(FocusDesign.cropIconSize)
+                        .border(1.dp, Color.White, RoundedCornerShape(4.dp))
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Иконка-визуализация соотношения
+                    Box(modifier = Modifier
+                        .fillMaxSize(if (value != null) if (value > 1f) 0.5f else 0.8f else 1f)
+                        .aspectRatio(value ?: 1f)
+                        .background(Color.White.copy(0.3f))
+                    )
+                }
+                Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun FloatingToolbar(onCropClick: () -> Unit, isCropActive: Boolean) {
+    Row(
+        modifier = Modifier
+            .padding(bottom = 20.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(0.7f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = { /* Undo */ }) { Icon(Icons.Default.Undo, null, tint = Color.White) }
+        IconButton(onClick = { /* Redo */ }) { Icon(Icons.Default.Redo, null, tint = Color.White) }
+
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.Gray))
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // КНОПКА КРОПА
+        IconButton(onClick = onCropClick) {
+            Icon(
+                imageVector = Icons.Default.Crop,
+                contentDescription = null,
+                tint = if (isCropActive) iOSBlue else Color.White
+            )
         }
     }
 }
