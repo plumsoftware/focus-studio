@@ -38,14 +38,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.ChangeHistory
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.filled.Square
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Tune
@@ -61,11 +69,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,6 +120,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
 
     var activeTool by remember { mutableStateOf(EditorTools.ADJUST) }
     var selectedTextId by remember { mutableStateOf<String?>(null) }
+    var selectedShapeId by remember { mutableStateOf<String?>(null) }
 
     // Логика истории
     fun updateSettings(newSettings: PhotoSettings) {
@@ -222,38 +233,65 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             }
                     )
 
-                    // Отрисовка текста (Тут используем updateLiveSettings для плавности)
+                    // Отрисовка текста
                     currentSettings.texts.forEach { textItem ->
-                        var offset by remember(textItem.id, currentIndex) { mutableStateOf(textItem.position) }
+                        // rememberUpdatedState гарантирует, что настройки (цвет, размер) не "протухнут" во время захвата жеста
+                        val currentTextState by rememberUpdatedState(textItem)
+
+                        // Локальное состояние позиции — ключ к плавности 60 FPS
+                        var localOffset by remember(textItem.id) { mutableStateOf(textItem.position) }
+
+                        // Синхронизация: если нажали Undo/Redo, обновляем локальную позицию
+                        LaunchedEffect(textItem.position) {
+                            localOffset = textItem.position
+                        }
+
                         Text(
                             text = textItem.text,
                             color = textItem.color,
                             fontSize = textItem.fontSize.sp,
                             modifier = Modifier
-                                .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+                                .offset { IntOffset(localOffset.x.roundToInt(), localOffset.y.roundToInt()) }
                                 .pointerInput(textItem.id) {
                                     detectDragGestures(
                                         onDrag = { change, dragAmount ->
                                             change.consume()
-                                            offset += dragAmount
-                                            // Живое обновление позиции без создания шага в истории
-                                            val updated = textItem.copy(position = offset)
-                                            updateLiveSettings(currentSettings.copy(
-                                                texts = currentSettings.texts.map { if(it.id == textItem.id) updated else it }
-                                            ))
+                                            // МГНОВЕННОЕ обновление позиции на экране без тяжелой рекомпозиции всего экрана
+                                            localOffset += dragAmount
                                         },
                                         onDragEnd = {
-                                            // Фиксируем финальную позицию в истории
-                                            val finalSettings = currentSettings.copy(
+                                            // Только когда палец отпущен, сохраняем финальную позицию в историю
+                                            // Копируем из currentTextState, чтобы НЕ ПОТЕРЯТЬ введенный текст, цвет и размер
+                                            val finalUpdate = currentTextState.copy(position = localOffset)
+                                            updateSettings(currentSettings.copy(
                                                 texts = currentSettings.texts.map {
-                                                    if(it.id == textItem.id) it.copy(position = offset) else it
+                                                    if(it.id == textItem.id) finalUpdate else it
                                                 }
-                                            )
-                                            updateSettings(finalSettings)
+                                            ))
                                         }
                                     )
                                 }
-                                .clickable { selectedTextId = textItem.id; activeTool = EditorTools.TEXT }
+                                .clickable {
+                                    selectedTextId = textItem.id
+                                    activeTool = EditorTools.TEXT
+                                }
+                                .padding(4.dp)
+                        )
+                    }
+
+                    currentSettings.shapes.forEach { shape ->
+                        ShapeComponent(
+                            shape = shape,
+                            isSelected = selectedShapeId == shape.id,
+                            onCommitTransform = { updated ->
+                                updateSettings(currentSettings.copy(
+                                    shapes = currentSettings.shapes.map { if(it.id == shape.id) updated else it }
+                                ))
+                            },
+                            onClick = {
+                                selectedShapeId = shape.id
+                                activeTool = EditorTools.SHAPES
+                            }
                         )
                     }
 
@@ -281,13 +319,25 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         EditorToolItem(Icons.Default.AutoAwesome, "Filter", activeTool == EditorTools.FILTERS) { activeTool = EditorTools.FILTERS }
                         EditorToolItem(Icons.Default.Crop, "Crop", activeTool == EditorTools.CROP) { activeTool = EditorTools.CROP }
                         EditorToolItem(Icons.Default.TextFields, "Text", activeTool == EditorTools.TEXT) { activeTool = EditorTools.TEXT }
+                        EditorToolItem(Icons.Default.Category, "Shapes", activeTool == EditorTools.SHAPES) { activeTool = EditorTools.SHAPES }
                     }
                     Box(modifier = Modifier.height(240.dp).padding(horizontal = 16.dp)) {
                         when (activeTool) {
                             EditorTools.ADJUST -> AdjustPanel(currentSettings) { updateSettings(it) }
                             EditorTools.FILTERS -> FilterRow(photoUri) { m, n -> updateSettings(currentSettings.copy(selectedFilter = m, filterName = n)) }
                             EditorTools.CROP -> CropPanel(currentSettings) { updateLiveSettings(it) }
-                            EditorTools.TEXT -> TextControlPanel(currentSettings, selectedTextId) { updateSettings(it) }
+                            EditorTools.TEXT -> TextControlPanel(
+                                settings = currentSettings,
+                                selectedTextId = selectedTextId,
+                                onUpdate = { updateSettings(it) },
+                                onClose = { selectedTextId = null }
+                            )
+                            EditorTools.SHAPES -> ShapeControlPanel(
+                                settings = currentSettings,
+                                selectedShapeId = selectedShapeId,
+                                onUpdate = { updateSettings(it) },
+                                onClose = { selectedShapeId = null }
+                            )
                         }
                     }
                 }
@@ -717,7 +767,8 @@ fun EditorToolItem(
 fun TextControlPanel(
     settings: PhotoSettings,
     selectedTextId: String?,
-    onUpdate: (PhotoSettings) -> Unit
+    onUpdate: (PhotoSettings) -> Unit,
+    onClose: () -> Unit // Добавлен параметр
 ) {
     val selectedText = settings.texts.find { it.id == selectedTextId }
 
@@ -758,7 +809,6 @@ fun TextControlPanel(
                 }
             }
         } else {
-            // Состояние: текст выбран. Используем ваш существующий TextEditPanel
             TextEditPanel(
                 selectedText = selectedText,
                 onUpdate = { updatedElement ->
@@ -767,10 +817,7 @@ fun TextControlPanel(
                     }
                     onUpdate(settings.copy(texts = newList))
                 },
-                onClose = {
-                    // Чтобы "закрыть" панель редактирования, нам нужно сбросить ID в PhotoEditorScreen
-                    // Но так как selectedTextId живет в родителе, лучше оставить управление кнопкой Close там
-                }
+                onClose = onClose
             )
         }
     }
@@ -823,5 +870,223 @@ fun AdjustPanel(settings: PhotoSettings, onUpdate: (PhotoSettings) -> Unit) {
         )
 
         Spacer(modifier = Modifier.height(FocusDesign.paddingLarge))
+    }
+}
+
+@Composable
+fun ShapeComponent(
+    shape: ShapeElement,
+    isSelected: Boolean,
+    onCommitTransform: (ShapeElement) -> Unit, // Оставляем только сохранение результата
+    onClick: () -> Unit
+) {
+    // ГАРАНТИЯ: Всегда видим актуальные цвета, поворот и тип фигуры
+    val currentShapeState by rememberUpdatedState(shape)
+
+    // ЛОКАЛЬНОЕ СОСТОЯНИЕ: залог плавности 60 FPS
+    var localOffset by remember(shape.id) { mutableStateOf(shape.position) }
+    var localSize by remember(shape.id) { mutableStateOf(shape.size) }
+
+    // СИНХРОНИЗАЦИЯ: для корректной работы Undo/Redo
+    LaunchedEffect(shape.position, shape.size) {
+        localOffset = shape.position
+        localSize = shape.size
+    }
+
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(localOffset.x.roundToInt(), localOffset.y.roundToInt()) }
+            .size(localSize.width.dp, localSize.height.dp)
+            .graphicsLayer(rotationZ = shape.rotation)
+    ) {
+        // Рендеринг самой фигуры
+        Canvas(modifier = Modifier.fillMaxSize().clickable { onClick() }) {
+            val path = Path().apply {
+                when (shape.type) {
+                    ShapeType.SQUARE -> addRect(Rect(Offset.Zero, size))
+                    ShapeType.CIRCLE -> addOval(Rect(Offset.Zero, size))
+                    ShapeType.TRIANGLE -> {
+                        moveTo(size.width / 2, 0f); lineTo(size.width, size.height); lineTo(0f, size.height); close()
+                    }
+                    ShapeType.STAR -> addStar(size, 5, size.width / 2, size.width / 4)
+                    ShapeType.ARROW -> addArrow(size)
+                }
+            }
+            if (shape.fillColor != Color.Transparent) drawPath(path, shape.fillColor)
+            if (shape.strokeColor != Color.Transparent) drawPath(path, shape.strokeColor, style = Stroke(2.dp.toPx()))
+        }
+
+        if (isSelected) {
+            // Рамка выделения
+            Box(modifier = Modifier.fillMaxSize().border(1.dp, iOSBlue.copy(0.5f), RoundedCornerShape(2.dp)))
+
+            // ПЕРЕТАСКИВАНИЕ (Локальное и плавное)
+            Box(modifier = Modifier.fillMaxSize().pointerInput(shape.id) {
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        localOffset += dragAmount
+                    },
+                    onDragEnd = {
+                        // Только тут фиксируем в историю, сохраняя все текущие настройки цвета/поворота
+                        onCommitTransform(currentShapeState.copy(position = localOffset))
+                    }
+                )
+            })
+
+            // ИЗМЕНЕНИЕ РАЗМЕРА (Ручка в углу)
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(13.dp, 13.dp)
+                    .background(Color.White, CircleShape)
+                    .border(1.dp, iOSBlue, CircleShape)
+                    .pointerInput(shape.id) {
+                        detectDragGestures(
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val newW = (localSize.width + dragAmount.x).coerceAtLeast(30f)
+                                val newH = (localSize.height + dragAmount.y).coerceAtLeast(30f)
+                                localSize = Size(newW, newH)
+                            },
+                            onDragEnd = {
+                                // Только тут фиксируем в историю
+                                onCommitTransform(currentShapeState.copy(size = localSize))
+                            }
+                        )
+                    }
+            )
+        }
+    }
+}
+
+@Composable
+fun ShapeControlPanel(
+    settings: PhotoSettings,
+    selectedShapeId: String?,
+    onUpdate: (PhotoSettings) -> Unit,
+    onClose: () -> Unit
+) {
+    val selectedShape = settings.shapes.find { it.id == selectedShapeId }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (selectedShape == null) {
+            SectionTitle("Добавить фигуру")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                ShapeType.entries.forEach { type ->
+                    ShapeSelectItem(type) {
+                        onUpdate(settings.copy(shapes = settings.shapes + ShapeElement(type = type)))
+                    }
+                }
+            }
+        } else {
+            // Заголовок с кнопкой УДАЛЕНИЯ (iOS Style)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    onUpdate(settings.copy(shapes = settings.shapes.filter { it.id != selectedShapeId }))
+                    onClose()
+                }) {
+                    Icon(Icons.Default.Delete, "Delete", tint = Color.Red.copy(0.8f))
+                }
+
+                Text("Настройка", color = Color.White, style = MaterialTheme.typography.labelMedium)
+
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, null, tint = Color.White)
+                }
+            }
+
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                FocusSlider("Поворот", selectedShape.rotation) {
+                    val updated = selectedShape.copy(rotation = it * 1.8f)
+                    onUpdate(settings.copy(shapes = settings.shapes.map { s -> if(s.id == updated.id) updated else s }))
+                }
+
+                Text("Заливка", style = MaterialTheme.typography.labelSmall, color = AppleGray)
+                ColorPickerRow(selectedShape.fillColor) { color ->
+                    val updated = selectedShape.copy(fillColor = color)
+                    onUpdate(settings.copy(shapes = settings.shapes.map { s -> if(s.id == updated.id) updated else s }))
+                }
+
+                Text("Контур", style = MaterialTheme.typography.labelSmall, color = AppleGray)
+                ColorPickerRow(selectedShape.strokeColor) { color ->
+                    val updated = selectedShape.copy(strokeColor = color)
+                    onUpdate(settings.copy(shapes = settings.shapes.map { s -> if(s.id == updated.id) updated else s }))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ColorPickerRow(
+    selectedColor: Color,
+    onColorSelected: (Color) -> Unit
+) {
+    val colors = listOf(
+        Color.Transparent, // Добавлено: Прозрачный
+        Color.White, Color.Gray, Color.Black,
+        Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFFFFCC00),
+        Color(0xFF4CD964), Color(0xFF007AFF), Color(0xFF5856D6), Color(0xFFAF52DE)
+    )
+
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = FocusDesign.paddingSmall),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp)
+    ) {
+        items(colors) { color ->
+            Box(
+                modifier = Modifier
+                    .size(FocusDesign.colorDotSize)
+                    .clip(CircleShape)
+                    .background(if (color == Color.Transparent) Color.White.copy(0.1f) else color)
+                    .border(
+                        width = if (selectedColor == color) 2.dp else 1.dp,
+                        color = if (selectedColor == color) iOSBlue else Color.White.copy(alpha = 0.2f),
+                        shape = CircleShape
+                    )
+                    .clickable { onColorSelected(color) },
+                contentAlignment = Alignment.Center
+            ) {
+                if (color == Color.Transparent) {
+                    // Символ прозрачности (красная линия)
+                    Box(modifier = Modifier.width(20.dp).height(2.dp).graphicsLayer(rotationZ = 45f).background(Color.Red))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShapeSelectItem(type: ShapeType, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .background(Color.White.copy(0.1f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = when(type) {
+                    ShapeType.SQUARE -> Icons.Default.Square
+                    ShapeType.CIRCLE -> Icons.Default.Circle
+                    ShapeType.TRIANGLE -> Icons.Default.ChangeHistory
+                    ShapeType.STAR -> Icons.Default.Star
+                    ShapeType.ARROW -> Icons.AutoMirrored.Filled.ArrowForward
+                },
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
     }
 }

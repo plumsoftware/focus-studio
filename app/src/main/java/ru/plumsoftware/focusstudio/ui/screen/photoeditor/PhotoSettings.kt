@@ -2,9 +2,9 @@ package ru.plumsoftware.focusstudio.ui.screen.photoeditor
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.style.TextAlign
 import java.util.UUID
 
@@ -19,7 +19,21 @@ data class PhotoSettings(
     val filterName: String = "None",
     val aspectRatio: Float? = null,
     val cropRect: Rect = Rect(0f, 0f, 1f, 1f), // Область кадрирования
-    val texts: List<TextElement> = emptyList()
+    val texts: List<TextElement> = emptyList(),
+    val shapes: List<ShapeElement> = emptyList()
+)
+
+enum class ShapeType { SQUARE, CIRCLE, TRIANGLE, STAR, ARROW }
+
+data class ShapeElement(
+    val id: String = UUID.randomUUID().toString(),
+    val type: ShapeType,
+    val position: Offset = Offset(300f, 300f),
+    val size: Size = Size(200f, 200f),
+    val rotation: Float = 0f,
+    val fillColor: Color = Color.White.copy(alpha = 0.5f),
+    val strokeColor: Color = Color.White,
+    val strokeWidth: Float = 2f
 )
 
 data class TextElement(
@@ -39,6 +53,7 @@ object EditorTools {
     const val FILTERS = "filters"
     const val CROP = "crop"
     const val TEXT = "text"
+    const val SHAPES = "shapes"
 }
 
 // Цветовые матрицы для фильтров

@@ -1,8 +1,11 @@
 package ru.plumsoftware.focusstudio.ui.screen.photoeditor
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
 
 // 1. Расширение для перемножения (конкатенации) матриц 4x5, так как в Compose нет timesAssign
 fun ColorMatrix.concat(second: ColorMatrix) {
@@ -63,4 +66,35 @@ fun calculateRectForRatio(ratio: Float?): Rect {
         val w = 0.8f * ratio
         Rect(0.5f - w/2f, 0.1f, 0.5f + w/2f, 0.9f)
     }
+}
+
+fun Path.addStar(size: Size, spikes: Int = 5, outerRadius: Float, innerRadius: Float) {
+    val center = Offset(size.width / 2, size.height / 2)
+    var angle = Math.PI / 2 * 3
+    val step = Math.PI / spikes
+
+    moveTo(center.x, (center.y - outerRadius))
+    repeat(spikes) {
+        lineTo(
+            (center.x + Math.cos(angle) * outerRadius).toFloat(),
+            (center.y + Math.sin(angle) * outerRadius).toFloat()
+        )
+        angle += step
+        lineTo(
+            (center.x + Math.cos(angle) * innerRadius).toFloat(),
+            (center.y + Math.sin(angle) * innerRadius).toFloat()
+        )
+        angle += step
+    }
+    close()
+}
+
+fun Path.addArrow(size: Size) {
+    val w = size.width
+    val h = size.height
+    moveTo(0f, h / 2)
+    lineTo(w, h / 2)
+    lineTo(w * 0.7f, h * 0.2f)
+    moveTo(w, h / 2)
+    lineTo(w * 0.7f, h * 0.8f)
 }
