@@ -1,11 +1,11 @@
-package ru.plumsoftware.focusstudio.ui.screen.photoeditor
+package ru.plumsoftware.focusstudio.ui.screen.editor.photo
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 
 // 1. Расширение для перемножения (конкатенации) матриц 4x5, так как в Compose нет timesAssign
 fun ColorMatrix.concat(second: ColorMatrix) {

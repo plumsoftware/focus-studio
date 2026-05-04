@@ -1,4 +1,4 @@
-package ru.plumsoftware.focusstudio.ui.screen.photoeditor
+package ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

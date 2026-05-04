@@ -19,7 +19,7 @@ import ru.plumsoftware.focusstudio.ui.screen.WelcomeScreen
 import ru.plumsoftware.focusstudio.ui.theme.FocusTheme
 import ru.plumsoftware.focusstudio.ui.theme.Routes
 import androidx.core.net.toUri
-import ru.plumsoftware.focusstudio.ui.screen.photoeditor.PhotoEditorScreen
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

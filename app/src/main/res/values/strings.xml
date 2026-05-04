@@ -35,6 +35,7 @@
     <string name="filter_cinema">Кино</string>
     <string name="filter_warm">Тёплый</string>
     <string name="filter_cold">Холодный</string>
+    <string name="filter_vivid">Vivid</string>
     <string name="label_crop">Кадрировать</string>
 
 
