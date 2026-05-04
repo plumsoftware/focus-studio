@@ -111,6 +111,21 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var activeTool by remember { mutableStateOf(EditorTools.ADJUST) }
     var selectedTextId by remember { mutableStateOf<String?>(null) }
 
+    // Логика истории
+    fun updateSettings(newSettings: PhotoSettings) {
+        if (newSettings != currentSettings) {
+            // Удаляем "будущее", если мы отменили действия и начали новое
+            while (history.size > currentIndex + 1) history.removeAt(history.size - 1)
+            history.add(newSettings)
+            currentIndex++
+            // Ограничение истории для экономии памяти (например, 30 шагов)
+            if (history.size > 30) {
+                history.removeAt(0)
+                currentIndex--
+            }
+        }
+    }
+
     val fileName = remember(photoUri) {
         photoUri?.let { uri ->
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -119,13 +134,6 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                 cursor.getString(nameIndex)
             }
         } ?: "Unknown.png"
-    }
-
-    fun updateSettings(newSettings: PhotoSettings) {
-        if (newSettings != currentSettings) {
-            while (history.size > currentIndex + 1) history.removeAt(history.size - 1)
-            history.add(newSettings); currentIndex++
-        }
     }
 
     fun updateLiveSettings(newSettings: PhotoSettings) {
@@ -137,25 +145,65 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         containerColor = Color.Black
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            // 1. ОБЛАСТЬ ИЗОБРАЖЕНИЯ (Центр)
+
+            // 1. ОБЛАСТЬ ИЗОБРАЖЕНИЯ
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                // Контейнер фото (ИСПРАВЛЕНО: занимает максимум места, сохраняя пропорции)
+                // ПАНЕЛЬ UNDO / REDO (Над фото, стиль iOS Minimalism)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { if (currentIndex > 0) currentIndex-- },
+                        enabled = currentIndex > 0,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Undo,
+                            contentDescription = "Undo",
+                            tint = if (currentIndex > 0) Color.White else Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Box(modifier = Modifier.width(1.dp).height(16.dp).background(Color.White.copy(alpha = 0.2f)))
+
+                    IconButton(
+                        onClick = { if (currentIndex < history.size - 1) currentIndex++ },
+                        enabled = currentIndex < history.size - 1,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Redo,
+                            contentDescription = "Redo",
+                            tint = if (currentIndex < history.size - 1) Color.White else Color.White.copy(alpha = 0.3f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Контейнер фото
                 Box(
                     modifier = Modifier
                         .padding(FocusDesign.paddingMedium)
-                        .fillMaxSize() // Позволяет занимать всё доступное место
+                        .fillMaxSize()
                         .clipToBounds()
                 ) {
                     AsyncImage(
                         model = photoUri,
                         contentDescription = null,
                         colorFilter = ColorFilter.colorMatrix(getCombinedMatrix(currentSettings)),
-                        contentScale = ContentScale.Fit, // Сохраняет пропорции, вписываясь в Box
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
@@ -165,7 +213,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                 translationX = -rect.left * size.width * scaleX
                                 translationY = -rect.top * size.height * scaleY
                                 rotationY = currentSettings.skewX * 40f
-
+                                // Эффект размытия
                                 if (currentSettings.blur > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     renderEffect = android.graphics.RenderEffect.createBlurEffect(
                                         currentSettings.blur, currentSettings.blur, android.graphics.Shader.TileMode.CLAMP
@@ -174,7 +222,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             }
                     )
 
-                    // ТЕКСТ
+                    // Отрисовка текста (Тут используем updateLiveSettings для плавности)
                     currentSettings.texts.forEach { textItem ->
                         var offset by remember(textItem.id, currentIndex) { mutableStateOf(textItem.position) }
                         Text(
@@ -188,12 +236,20 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             offset += dragAmount
-                                        },
-                                        onDragEnd = {
+                                            // Живое обновление позиции без создания шага в истории
                                             val updated = textItem.copy(position = offset)
-                                            updateSettings(currentSettings.copy(
+                                            updateLiveSettings(currentSettings.copy(
                                                 texts = currentSettings.texts.map { if(it.id == textItem.id) updated else it }
                                             ))
+                                        },
+                                        onDragEnd = {
+                                            // Фиксируем финальную позицию в истории
+                                            val finalSettings = currentSettings.copy(
+                                                texts = currentSettings.texts.map {
+                                                    if(it.id == textItem.id) it.copy(position = offset) else it
+                                                }
+                                            )
+                                            updateSettings(finalSettings)
                                         }
                                     )
                                 }
@@ -201,12 +257,11 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         )
                     }
 
-                    // РАМКА КАДРИРОВАНИЯ
+                    // Оверлей кадрирования
                     if (activeTool == EditorTools.CROP) {
                         AdvancedCropOverlay(
                             currentSettings = currentSettings,
                             onCropApply = { newRect ->
-                                // Реальная обрезка (зум) происходит ТУТ
                                 updateSettings(currentSettings.copy(
                                     cropRect = newRect,
                                     aspectRatio = (newRect.width / newRect.height)
@@ -231,7 +286,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         when (activeTool) {
                             EditorTools.ADJUST -> AdjustPanel(currentSettings) { updateSettings(it) }
                             EditorTools.FILTERS -> FilterRow(photoUri) { m, n -> updateSettings(currentSettings.copy(selectedFilter = m, filterName = n)) }
-                            EditorTools.CROP -> CropPanel(currentSettings) { updatedSettings -> updateLiveSettings(updatedSettings) }
+                            EditorTools.CROP -> CropPanel(currentSettings) { updateLiveSettings(it) }
                             EditorTools.TEXT -> TextControlPanel(currentSettings, selectedTextId) { updateSettings(it) }
                         }
                     }
