@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;600&family=Outfit:wght@400;600&family=Playfair+Display:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --ios-blue: #0A84FF;
+  --ios-bg: #000000;
+  --ios-glass: rgba(28, 28, 30, 0.7);
+  --ios-glass-border: rgba(255, 255, 255, 0.1);
+}
+
+@layer base {
+  body {
+    @apply font-sans text-white bg-black antialiased transition-colors duration-300;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  }
+}
+
+.glass {
+  background: var(--ios-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 0.5px solid var(--ios-glass-border);
+}
+
+.ios-shadow {
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Custom iOS Slider styling via standard range inputs */
+input[type="range"] {
+  @apply appearance-none h-1 bg-white/20 rounded-full cursor-pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  @apply appearance-none w-5 h-5 bg-white rounded-full shadow-lg border-0;
+  cursor: pointer;
+}
+
+.active-ring {
+  outline: 2px solid var(--ios-blue);
+  outline-offset: 2px;
+}
+
+.text-ios-blue {
+  color: var(--ios-blue);
+}
+
+.bg-ios-blue {
+  background-color: var(--ios-blue);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 2px;
+  width: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
