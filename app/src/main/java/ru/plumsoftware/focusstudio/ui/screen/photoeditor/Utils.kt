@@ -1,5 +1,6 @@
 package ru.plumsoftware.focusstudio.ui.screen.photoeditor
 
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ColorFilter
 
@@ -49,4 +50,17 @@ fun getCombinedMatrix(settings: PhotoSettings): ColorMatrix {
     result.concat(contrastMatrix)
 
     return result
+}
+
+fun calculateRectForRatio(ratio: Float?): Rect {
+    if (ratio == null) return Rect(0.1f, 0.1f, 0.9f, 0.9f)
+
+    // Вписываем пресет в центр (нормализованные координаты 0..1)
+    return if (ratio > 1f) { // Горизонтальный (напр. 16:9)
+        val h = 0.8f / ratio
+        Rect(0.1f, 0.5f - h/2f, 0.9f, 0.5f + h/2f)
+    } else { // Вертикальный (напр. 3:4)
+        val w = 0.8f * ratio
+        Rect(0.5f - w/2f, 0.1f, 0.5f + w/2f, 0.9f)
+    }
 }

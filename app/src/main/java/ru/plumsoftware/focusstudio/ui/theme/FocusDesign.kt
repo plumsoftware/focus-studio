@@ -35,4 +35,8 @@ object FocusDesign {
     val sliderThumbSize = 20.dp
     val sliderTrackHeight = 4.dp
     val cropIconSize = 48.dp
+
+    val cropHandleSize = 24.dp
+    val textPanelHeight = 280.dp
+    val colorDotSize = 32.dp
 }

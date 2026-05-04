@@ -4,12 +4,17 @@ import androidx.compose.ui.graphics.ColorMatrix
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,6 +24,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -28,13 +35,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
@@ -55,42 +69,48 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import ru.plumsoftware.focusstudio.R
-import ru.plumsoftware.focusstudio.ui.screen.LanguageToggle
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
-import ru.plumsoftware.focusstudio.ui.theme.DarkBg
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
-import ru.plumsoftware.focusstudio.ui.theme.Routes
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
 fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     val context = LocalContext.current
-
-    // Состояние истории
     val history = remember { mutableStateListOf(PhotoSettings()) }
     var currentIndex by remember { mutableIntStateOf(0) }
-
-    var isCropMode by remember { mutableStateOf(false) }
-
     val currentSettings = history[currentIndex]
 
-    // Получение имени файла
+    var activeTool by remember { mutableStateOf(EditorTools.ADJUST) }
+    var selectedTextId by remember { mutableStateOf<String?>(null) }
+
     val fileName = remember(photoUri) {
         photoUri?.let { uri ->
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -101,112 +121,118 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         } ?: "Unknown.png"
     }
 
-    // Функция обновления настроек с сохранением в историю
     fun updateSettings(newSettings: PhotoSettings) {
         if (newSettings != currentSettings) {
-            // Удаляем "будущие" шаги, если мы сделали undo и начали менять заново
-            while (history.size > currentIndex + 1) {
-                history.removeAt(history.size - 1)
-            }
-            history.add(newSettings)
-            currentIndex++
-            // Ограничиваем историю 20 шагами
-            if (history.size > 20) {
-                history.removeAt(0)
-                currentIndex--
-            }
+            while (history.size > currentIndex + 1) history.removeAt(history.size - 1)
+            history.add(newSettings); currentIndex++
         }
     }
 
+    fun updateLiveSettings(newSettings: PhotoSettings) {
+        history[currentIndex] = newSettings
+    }
+
     Scaffold(
-        topBar = {
-            EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {})
-        },
+        topBar = { EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {}) },
         containerColor = Color.Black
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-
-            // ХОЛСТ
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            // 1. ОБЛАСТЬ ИЗОБРАЖЕНИЯ (Центр)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                // Контейнер фото (ИСПРАВЛЕНО: занимает максимум места, сохраняя пропорции)
                 Box(
                     modifier = Modifier
                         .padding(FocusDesign.paddingMedium)
-                        .then(
-                            // ПРИМЕНЕНИЕ ОБРЕЗКИ (Aspect Ratio)
-                            if (currentSettings.aspectRatio != null)
-                                Modifier.aspectRatio(currentSettings.aspectRatio!!)
-                            else Modifier.fillMaxHeight(0.8f)
-                        )
-                        .clip(RoundedCornerShape(if (isCropMode) 0.dp else FocusDesign.cornerExtraSmall))
-                        .border(
-                            width = if (isCropMode) 2.dp else 0.dp,
-                            color = if (isCropMode) Color.White else Color.Transparent
-                        )
+                        .fillMaxSize() // Позволяет занимать всё доступное место
+                        .clipToBounds()
                 ) {
                     AsyncImage(
                         model = photoUri,
                         contentDescription = null,
-                        contentScale = if (currentSettings.aspectRatio != null) ContentScale.Crop else ContentScale.Fit,
                         colorFilter = ColorFilter.colorMatrix(getCombinedMatrix(currentSettings)),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                        contentScale = ContentScale.Fit, // Сохраняет пропорции, вписываясь в Box
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val rect = currentSettings.cropRect
+                                scaleX = 1f / (rect.right - rect.left)
+                                scaleY = 1f / (rect.bottom - rect.top)
+                                translationX = -rect.left * size.width * scaleX
+                                translationY = -rect.top * size.height * scaleY
+                                rotationY = currentSettings.skewX * 40f
 
-                // Floating Toolbar с кнопкой обрезки
-                FloatingToolbar(
-                    onCropClick = { isCropMode = !isCropMode },
-                    isCropActive = isCropMode
-                )
+                                if (currentSettings.blur > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    renderEffect = android.graphics.RenderEffect.createBlurEffect(
+                                        currentSettings.blur, currentSettings.blur, android.graphics.Shader.TileMode.CLAMP
+                                    ).asComposeRenderEffect()
+                                }
+                            }
+                    )
+
+                    // ТЕКСТ
+                    currentSettings.texts.forEach { textItem ->
+                        var offset by remember(textItem.id, currentIndex) { mutableStateOf(textItem.position) }
+                        Text(
+                            text = textItem.text,
+                            color = textItem.color,
+                            fontSize = textItem.fontSize.sp,
+                            modifier = Modifier
+                                .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+                                .pointerInput(textItem.id) {
+                                    detectDragGestures(
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            offset += dragAmount
+                                        },
+                                        onDragEnd = {
+                                            val updated = textItem.copy(position = offset)
+                                            updateSettings(currentSettings.copy(
+                                                texts = currentSettings.texts.map { if(it.id == textItem.id) updated else it }
+                                            ))
+                                        }
+                                    )
+                                }
+                                .clickable { selectedTextId = textItem.id; activeTool = EditorTools.TEXT }
+                        )
+                    }
+
+                    // РАМКА КАДРИРОВАНИЯ
+                    if (activeTool == EditorTools.CROP) {
+                        AdvancedCropOverlay(
+                            currentSettings = currentSettings,
+                            onCropApply = { newRect ->
+                                // Реальная обрезка (зум) происходит ТУТ
+                                updateSettings(currentSettings.copy(
+                                    cropRect = newRect,
+                                    aspectRatio = (newRect.width / newRect.height)
+                                ))
+                                activeTool = EditorTools.ADJUST
+                            }
+                        )
+                    }
+                }
             }
 
-            // ПАНЕЛЬ УПРАВЛЕНИЯ
-            Surface(
-                modifier = Modifier.fillMaxWidth().height(FocusDesign.bottomPanelHeight),
-                color = DarkSurface,
-                shape = RoundedCornerShape(topStart = FocusDesign.cornerLarge, topEnd = FocusDesign.cornerLarge)
-            ) {
-                Column(modifier = Modifier.padding(FocusDesign.paddingMedium)) {
-                    if (isCropMode) {
-                        // ЭКРАН ОБРЕЗКИ
-                        SectionTitle(stringResource(R.string.label_crop)) // Добавьте в strings
-                        AspectRatioRow { ratio ->
-                            updateSettings(currentSettings.copy(aspectRatio = ratio))
-                        }
-                    } else {
-                        // ЭКРАН НАСТРОЕК (Ваш существующий код слайдеров)
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            SectionTitle(stringResource(R.string.label_settings))
-                            FocusSlider(stringResource(R.string.param_brightness), currentSettings.brightness) {
-                                updateSettings(currentSettings.copy(brightness = it))
-                            }
-                            // ТЕПЕРЬ КОНТРАСТ БУДЕТ ДВИГАТЬСЯ ПЛАВНО
-                            FocusSlider(stringResource(R.string.param_contrast), currentSettings.contrast) {
-                                updateSettings(currentSettings.copy(contrast = it))
-                            }
-
-
-                            Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
-
-                            SectionTitle(stringResource(R.string.label_filters_grade))
-                            FilterRow(photoUri) { filterMatrix, name ->
-                                updateSettings(
-                                    currentSettings.copy(
-                                        selectedFilter = filterMatrix,
-                                        filterName = name
-                                    )
-                                )
-                            }
-
-                            // Кнопка сброса
-                            TextButton(
-                                onClick = { updateSettings(PhotoSettings()) },
-                                modifier = Modifier.align(Alignment.CenterHorizontally)
-                            ) {
-                                Text(
-                                    stringResource(R.string.btn_reset_all).uppercase(),
-                                    color = AppleGray
-                                )
-                            }
+            // НИЖНЯЯ ПАНЕЛЬ (без изменений)
+            Surface(modifier = Modifier.fillMaxWidth(), color = DarkSurface, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+                Column {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        EditorToolItem(Icons.Default.Tune, "Adjust", activeTool == EditorTools.ADJUST) { activeTool = EditorTools.ADJUST }
+                        EditorToolItem(Icons.Default.AutoAwesome, "Filter", activeTool == EditorTools.FILTERS) { activeTool = EditorTools.FILTERS }
+                        EditorToolItem(Icons.Default.Crop, "Crop", activeTool == EditorTools.CROP) { activeTool = EditorTools.CROP }
+                        EditorToolItem(Icons.Default.TextFields, "Text", activeTool == EditorTools.TEXT) { activeTool = EditorTools.TEXT }
+                    }
+                    Box(modifier = Modifier.height(240.dp).padding(horizontal = 16.dp)) {
+                        when (activeTool) {
+                            EditorTools.ADJUST -> AdjustPanel(currentSettings) { updateSettings(it) }
+                            EditorTools.FILTERS -> FilterRow(photoUri) { m, n -> updateSettings(currentSettings.copy(selectedFilter = m, filterName = n)) }
+                            EditorTools.CROP -> CropPanel(currentSettings) { updatedSettings -> updateLiveSettings(updatedSettings) }
+                            EditorTools.TEXT -> TextControlPanel(currentSettings, selectedTextId) { updateSettings(it) }
                         }
                     }
                 }
@@ -216,14 +242,31 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
 }
 
 @Composable
+fun CropPanel(settings: PhotoSettings, onUpdate: (PhotoSettings) -> Unit) {
+    Column {
+        SectionTitle("Разрешение")
+        AspectRatioRow { ratio ->
+            // При клике на 3:4 мы:
+            // 1. Устанавливаем ratio (чтобы рамка знала, как сохранять пропорции при тяге)
+            // 2. Рассчитываем новый rect, чтобы рамка визуально изменилась сразу
+            val newRect = calculateRectForRatio(ratio)
+            onUpdate(settings.copy(
+                aspectRatio = ratio,
+                cropRect = newRect
+            ))
+        }
+    }
+}
+
+@Composable
 fun AspectRatioRow(onRatioSelected: (Float?) -> Unit) {
     val ratios = listOf(
         "Свободно" to null,
         "1:1" to 1f,
-        "3:4" to 3f/4f,
-        "4:3" to 4f/3f,
-        "16:9" to 16f/9f,
-        "9:16" to 9f/16f
+        "3:4" to 3f / 4f,
+        "4:3" to 4f / 3f,
+        "16:9" to 16f / 9f,
+        "9:16" to 9f / 16f
     )
 
     LazyRow(
@@ -245,13 +288,19 @@ fun AspectRatioRow(onRatioSelected: (Float?) -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     // Иконка-визуализация соотношения
-                    Box(modifier = Modifier
-                        .fillMaxSize(if (value != null) if (value > 1f) 0.5f else 0.8f else 1f)
-                        .aspectRatio(value ?: 1f)
-                        .background(Color.White.copy(0.3f))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize(if (value != null) if (value > 1f) 0.5f else 0.8f else 1f)
+                            .aspectRatio(value ?: 1f)
+                            .background(Color.White.copy(0.3f))
                     )
                 }
-                Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White, modifier = Modifier.padding(top = 8.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
     }
@@ -271,7 +320,10 @@ fun FloatingToolbar(onCropClick: () -> Unit, isCropActive: Boolean) {
         IconButton(onClick = { /* Redo */ }) { Icon(Icons.Default.Redo, null, tint = Color.White) }
 
         Spacer(modifier = Modifier.width(8.dp))
-        Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.Gray))
+        Box(modifier = Modifier
+            .width(1.dp)
+            .height(24.dp)
+            .background(Color.Gray))
         Spacer(modifier = Modifier.width(8.dp))
 
         // КНОПКА КРОПА
@@ -341,7 +393,9 @@ fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) 
         Triple(stringResource(R.string.filter_none), FilterMatrices.None, "None"),
         Triple(stringResource(R.string.filter_vintage), FilterMatrices.Vintage, "Vintage"),
         Triple(stringResource(R.string.filter_noir), FilterMatrices.Noir, "Noir"),
-        Triple(stringResource(R.string.filter_cinema), FilterMatrices.Cinema, "Cinema")
+        Triple(stringResource(R.string.filter_cinema), FilterMatrices.Cinema, "Cinema"),
+        Triple(stringResource(R.string.filter_warm), FilterMatrices.Warm, "Warm"),
+        Triple(stringResource(R.string.filter_cold), FilterMatrices.Cold, "Cold")
     )
 
     LazyRow(
@@ -357,7 +411,11 @@ fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) 
                     modifier = Modifier
                         .size(FocusDesign.filterItemSize)
                         .clip(RoundedCornerShape(FocusDesign.cornerMedium))
-                        .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(FocusDesign.cornerMedium))
+                        .border(
+                            1.dp,
+                            Color.White.copy(0.1f),
+                            RoundedCornerShape(FocusDesign.cornerMedium)
+                        )
                 ) {
                     // ПРЕВЬЮ ФИЛЬТРА
                     AsyncImage(
@@ -382,12 +440,333 @@ fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) 
 @Composable
 fun SectionTitle(title: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier
-            .width(4.dp)
-            .height(16.dp)
-            .background(iOSBlue))
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(16.dp)
+                .background(iOSBlue)
+        )
         Spacer(modifier = Modifier.width(8.dp))
         Text(title, style = MaterialTheme.typography.labelSmall, color = Color.White)
     }
     Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
+}
+
+@Composable
+fun AdvancedCropOverlay(
+    currentSettings: PhotoSettings,
+    onCropApply: (Rect) -> Unit
+) {
+    // Синхронизируем локальный rect с тем, что приходит из пресетов
+    var rect by remember(currentSettings.cropRect) { mutableStateOf(currentSettings.cropRect) }
+    val ratio = currentSettings.aspectRatio
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+
+        Canvas(modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(currentSettings.cropRect) { // Перезапуск при смене пресета
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    val dx = dragAmount.x / w
+                    val dy = dragAmount.y / h
+                    val x = change.position.x / w
+                    val y = change.position.y / h
+
+                    val threshold = 0.12f // Зона захвата краев
+
+                    rect = when {
+                        // ТЯНЕМ ПРАВЫЙ КРАЙ
+                        x > rect.right - threshold -> {
+                            val newRight = (rect.right + dx).coerceIn(rect.left + 0.1f, 1f)
+                            if (ratio != null) {
+                                // Если есть пресет, меняем высоту пропорционально
+                                val newHeight = (newRight - rect.left) / ratio
+                                rect.copy(right = newRight, bottom = (rect.top + newHeight).coerceAtMost(1f))
+                            } else {
+                                rect.copy(right = newRight)
+                            }
+                        }
+                        // ТЯНЕМ ЛЕВЫЙ КРАЙ
+                        x < rect.left + threshold -> {
+                            val newLeft = (rect.left + dx).coerceIn(0f, rect.right - 0.1f)
+                            if (ratio != null) {
+                                val newHeight = (rect.right - newLeft) / ratio
+                                rect.copy(left = newLeft, bottom = (rect.top + newHeight).coerceAtMost(1f))
+                            } else {
+                                rect.copy(left = newLeft)
+                            }
+                        }
+                        // ТЯНЕМ НИЖНИЙ КРАЙ
+                        y > rect.bottom - threshold -> {
+                            val newBottom = (rect.bottom + dy).coerceIn(rect.top + 0.1f, 1f)
+                            if (ratio != null) {
+                                val newWidth = (newBottom - rect.top) * ratio
+                                rect.copy(bottom = newBottom, right = (rect.left + newWidth).coerceAtMost(1f))
+                            } else {
+                                rect.copy(bottom = newBottom)
+                            }
+                        }
+                        // ПЕРЕМЕЩЕНИЕ ВСЕЙ РАМКИ
+                        else -> {
+                            val newL = (rect.left + dx).coerceIn(0f, 1f - rect.width)
+                            val newT = (rect.top + dy).coerceIn(0f, 1f - rect.height)
+                            Rect(newL, newT, newL + rect.width, newT + rect.height)
+                        }
+                    }
+                }
+            }
+        ) {
+            val r = Rect(rect.left * w, rect.top * h, rect.right * w, rect.bottom * h)
+
+            // Затемнение фона
+            val path = Path().apply {
+                addRect(Rect(0f, 0f, size.width, size.height))
+                addRect(r)
+                fillType = PathFillType.EvenOdd
+            }
+            drawPath(path, Color.Black.copy(alpha = 0.7f))
+
+            // Рамка (iOS Style)
+            drawRect(Color.White, topLeft = r.topLeft, size = r.size, style = Stroke(width = 2.dp.toPx()))
+
+            // Ручки-овалы (индикаторы интерактивности)
+            val hLen = 32.dp.toPx(); val hThick = 4.dp.toPx()
+            val hColor = Color.White
+            // Верх, Низ, Лево, Право
+            drawRoundRect(hColor, Offset(r.center.x - hLen/2, r.top - hThick/2), Size(hLen, hThick), CornerRadius(hThick))
+            drawRoundRect(hColor, Offset(r.center.x - hLen/2, r.bottom - hThick/2), Size(hLen, hThick), CornerRadius(hThick))
+            drawRoundRect(hColor, Offset(r.left - hThick/2, r.center.y - hLen/2), Size(hThick, hLen), CornerRadius(hThick))
+            drawRoundRect(hColor, Offset(r.right - hThick/2, r.center.y - hLen/2), Size(hThick, hLen), CornerRadius(hThick))
+        }
+
+        // Кнопка подтверждения
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 28.dp)
+                .clickable { onCropApply(rect) },
+            color = iOSBlue,
+            shape = CircleShape
+        ) {
+            Text(
+                "КАДРИРОВАТЬ",
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+    }
+}
+
+@Composable
+fun TextEditPanel(
+    selectedText: TextElement?,
+    onUpdate: (TextElement) -> Unit,
+    onClose: () -> Unit
+) {
+    if (selectedText == null) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(DarkSurface)
+            .padding(FocusDesign.paddingMedium)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Текст", color = Color.White, fontWeight = FontWeight.Bold)
+            Icon(
+                Icons.Default.Close,
+                null,
+                tint = Color.White,
+                modifier = Modifier.clickable { onClose() })
+        }
+
+        Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
+
+        // Изменение текста
+        BasicTextField(
+            value = selectedText.text,
+            onValueChange = { onUpdate(selectedText.copy(text = it)) },
+            textStyle = TextStyle(color = Color.White, fontSize = 18.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(0.1f), RoundedCornerShape(8.dp))
+                .padding(12.dp)
+        )
+
+        // Размер шрифта
+        FocusSlider("Размер", selectedText.fontSize) { onUpdate(selectedText.copy(fontSize = it)) }
+
+        // Цвет
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val colors =
+                listOf(Color.White, Color.Black, Color.Red, Color.Yellow, iOSBlue, Color.Green)
+            items(colors) { color ->
+                Box(
+                    modifier = Modifier
+                        .size(FocusDesign.colorDotSize)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(
+                            if (selectedText.color == color) 2.dp else 0.dp,
+                            Color.White,
+                            CircleShape
+                        )
+                        .clickable { onUpdate(selectedText.copy(color = color)) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EditorToolItem(
+    icon: ImageVector,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(FocusDesign.cornerExtraSmall))
+            .clickable { onClick() }
+            .padding(vertical = FocusDesign.paddingSmall)
+            .width(72.dp) // Фиксированная ширина для равномерного распределения
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            // Используем iOSBlue для активного состояния и AppleGray для неактивного
+            tint = if (isSelected) iOSBlue else AppleGray,
+            modifier = Modifier.size(24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = label,
+            // Используем вашу типографику SF-Pro
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isSelected) iOSBlue else AppleGray,
+            fontSize = 10.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun TextControlPanel(
+    settings: PhotoSettings,
+    selectedTextId: String?,
+    onUpdate: (PhotoSettings) -> Unit
+) {
+    val selectedText = settings.texts.find { it.id == selectedTextId }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (selectedText == null) {
+            // Состояние: текст не выбран. Показываем кнопку добавления в стиле iOS
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    onClick = {
+                        val newText = TextElement(
+                            text = "Tap to edit",
+                            position = Offset(400f, 400f), // Центрируем примерно
+                            color = Color.White,
+                            fontSize = 30f
+                        )
+                        onUpdate(settings.copy(texts = settings.texts + newText))
+                    },
+                    color = iOSBlue,
+                    shape = RoundedCornerShape(FocusDesign.cornerMedium),
+                    modifier = Modifier.height(FocusDesign.languageToggleSize)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = FocusDesign.paddingMedium),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(FocusDesign.paddingSmall))
+                        Text(
+                            "Добавить текст",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        } else {
+            // Состояние: текст выбран. Используем ваш существующий TextEditPanel
+            TextEditPanel(
+                selectedText = selectedText,
+                onUpdate = { updatedElement ->
+                    val newList = settings.texts.map {
+                        if (it.id == updatedElement.id) updatedElement else it
+                    }
+                    onUpdate(settings.copy(texts = newList))
+                },
+                onClose = {
+                    // Чтобы "закрыть" панель редактирования, нам нужно сбросить ID в PhotoEditorScreen
+                    // Но так как selectedTextId живет в родителе, лучше оставить управление кнопкой Close там
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun AdjustPanel(settings: PhotoSettings, onUpdate: (PhotoSettings) -> Unit) {
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+    ) {
+        SectionTitle(stringResource(R.string.label_settings))
+
+        // Яркость
+        FocusSlider(
+            label = stringResource(R.string.param_brightness),
+            value = settings.brightness,
+            onValueChange = { onUpdate(settings.copy(brightness = it)) }
+        )
+
+        // Контраст
+        FocusSlider(
+            label = stringResource(R.string.param_contrast),
+            value = settings.contrast,
+            onValueChange = { onUpdate(settings.copy(contrast = it)) }
+        )
+
+        // Цветовой тон (Hue)
+        FocusSlider(
+            label = stringResource(R.string.param_hue),
+            value = settings.hue,
+            onValueChange = { onUpdate(settings.copy(hue = it)) }
+        )
+
+        // Насыщенность (мапим Float 0.0..2.0 в диапазон слайдера -100..100)
+        FocusSlider(
+            label = stringResource(R.string.param_saturation),
+            value = (settings.saturation - 1f) * 100f,
+            onValueChange = { onUpdate(settings.copy(saturation = 1f + (it / 100f))) }
+        )
+
+        // Размытие
+        FocusSlider(
+            label = stringResource(R.string.param_blur),
+            value = settings.blur,
+            onValueChange = { onUpdate(settings.copy(blur = it)) }
+        )
+
+        Spacer(modifier = Modifier.height(FocusDesign.paddingLarge))
+    }
 }
