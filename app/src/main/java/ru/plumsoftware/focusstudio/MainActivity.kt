@@ -20,6 +20,7 @@ import ru.plumsoftware.focusstudio.ui.theme.FocusTheme
 import ru.plumsoftware.focusstudio.ui.theme.Routes
 import androidx.core.net.toUri
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.VideoEditorScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,13 +41,22 @@ class MainActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val uriString = backStackEntry.arguments?.getString("photoUri")
                         val uri = uriString?.let { Uri.decode(it).toUri() }
-                        PhotoEditorScreen(photoUri = uri, onCancel = { navController.popBackStack() })
+                        PhotoEditorScreen(
+                            photoUri = uri,
+                            onCancel = { navController.popBackStack() })
                     }
-                    composable(Routes.VIDEO_EDITOR) {
-                        // Экран видео-редактора
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Video Editor Coming Soon")
+                    composable(
+                        route = "${Routes.VIDEO_EDITOR}/{videoUri}",
+                        arguments = listOf(navArgument("videoUri") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val uri = backStackEntry.arguments?.getString("videoUri")?.let {
+                            Uri.decode(
+                                it
+                            ).toUri()
                         }
+                        VideoEditorScreen(
+                            videoUri = uri,
+                            onCancel = { navController.popBackStack() })
                     }
                 }
             }

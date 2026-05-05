@@ -38,5 +38,6 @@
     <string name="filter_vivid">Vivid</string>
     <string name="label_crop">Кадрировать</string>
 
-
+    <string name="label_timeline">Timeline</string>
+    <string name="btn_trim">Обрезать</string>
 </resources>

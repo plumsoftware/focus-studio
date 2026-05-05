@@ -64,6 +64,16 @@ fun WelcomeScreen(navController: NavController) {
         }
     }
 
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val encodedUri = Uri.encode(it.toString())
+            navController.navigate("${Routes.VIDEO_EDITOR}/$encodedUri")
+        }
+    }
+
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,7 +137,7 @@ fun WelcomeScreen(navController: NavController) {
                 desc = stringResource(R.string.video_desc),
                 icon = Icons.Default.Videocam,
                 iconColor = iOSBlue,
-                onClick = { navController.navigate(Routes.VIDEO_EDITOR) }
+                onClick = { videoPickerLauncher.launch("video/*") }
             )
             SelectionCard(
                 modifier = Modifier.weight(1f),
