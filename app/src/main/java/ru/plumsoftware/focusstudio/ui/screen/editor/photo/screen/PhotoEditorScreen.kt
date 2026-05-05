@@ -1,5 +1,6 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen
 
+import android.content.Intent
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.net.Uri
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -55,7 +57,9 @@ import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -64,13 +68,16 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.AdvancedCropOverl
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.EditorTools
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.CropPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.filter.FilterRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getCombinedMatrix
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.saveEditedImage
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeComponent
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeControlPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.text.TextControlPanel
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
+import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
 fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
@@ -82,6 +89,9 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var activeTool by remember { mutableStateOf(EditorTools.ADJUST) }
     var selectedTextId by remember { mutableStateOf<String?>(null) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Логика истории
     fun updateSettings(newSettings: PhotoSettings) {
@@ -113,7 +123,17 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     }
 
     Scaffold(
-        topBar = { EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {}) },
+        topBar = {
+            EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {
+                if (photoUri != null && !isExporting) {
+                    isExporting = true
+                    saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
+                        showExportDialog = true
+                        isExporting = false
+                    }
+                }
+            })
+        },
         containerColor = Color.Black
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
@@ -148,7 +168,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         )
                     }
 
-                    Box(modifier = Modifier.width(1.dp).height(16.dp).background(Color.White.copy(alpha = 0.2f)))
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(16.dp)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    )
 
                     IconButton(
                         onClick = { if (currentIndex < history.size - 1) currentIndex++ },
@@ -158,7 +183,9 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Redo,
                             contentDescription = "Redo",
-                            tint = if (currentIndex < history.size - 1) Color.White else Color.White.copy(alpha = 0.3f),
+                            tint = if (currentIndex < history.size - 1) Color.White else Color.White.copy(
+                                alpha = 0.3f
+                            ),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -170,6 +197,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         .padding(FocusDesign.paddingMedium)
                         .fillMaxSize()
                         .clipToBounds()
+                        .onGloballyPositioned { boxSize = it.size }
                 ) {
                     AsyncImage(
                         model = photoUri,
@@ -188,7 +216,9 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                 // Эффект размытия
                                 if (currentSettings.blur > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     renderEffect = RenderEffect.createBlurEffect(
-                                        currentSettings.blur, currentSettings.blur, Shader.TileMode.CLAMP
+                                        currentSettings.blur,
+                                        currentSettings.blur,
+                                        Shader.TileMode.CLAMP
                                     ).asComposeRenderEffect()
                                 }
                             }
@@ -212,7 +242,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             color = textItem.color,
                             fontSize = textItem.fontSize.sp,
                             modifier = Modifier
-                                .offset { IntOffset(localOffset.x.roundToInt(), localOffset.y.roundToInt()) }
+                                .offset {
+                                    IntOffset(
+                                        localOffset.x.roundToInt(),
+                                        localOffset.y.roundToInt()
+                                    )
+                                }
                                 .pointerInput(textItem.id) {
                                     detectDragGestures(
                                         onDrag = { change, dragAmount ->
@@ -223,12 +258,14 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                         onDragEnd = {
                                             // Только когда палец отпущен, сохраняем финальную позицию в историю
                                             // Копируем из currentTextState, чтобы НЕ ПОТЕРЯТЬ введенный текст, цвет и размер
-                                            val finalUpdate = currentTextState.copy(position = localOffset)
-                                            updateSettings(currentSettings.copy(
-                                                texts = currentSettings.texts.map {
-                                                    if(it.id == textItem.id) finalUpdate else it
-                                                }
-                                            ))
+                                            val finalUpdate =
+                                                currentTextState.copy(position = localOffset)
+                                            updateSettings(
+                                                currentSettings.copy(
+                                                    texts = currentSettings.texts.map {
+                                                        if (it.id == textItem.id) finalUpdate else it
+                                                    }
+                                                ))
                                         }
                                     )
                                 }
@@ -247,8 +284,8 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             onCommitTransform = { updated ->
                                 updateSettings(
                                     currentSettings.copy(
-                                    shapes = currentSettings.shapes.map { if (it.id == shape.id) updated else it }
-                                ))
+                                        shapes = currentSettings.shapes.map { if (it.id == shape.id) updated else it }
+                                    ))
                             },
                             onClick = {
                                 selectedShapeId = shape.id
@@ -276,16 +313,47 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
             }
 
             // НИЖНЯЯ ПАНЕЛЬ (без изменений)
-            Surface(modifier = Modifier.fillMaxWidth(), color = DarkSurface, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = DarkSurface,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            ) {
                 Column {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        EditorToolItem(Icons.Default.Tune, "Adjust", activeTool == EditorTools.ADJUST) { activeTool = EditorTools.ADJUST }
-                        EditorToolItem(Icons.Default.AutoAwesome, "Filter", activeTool == EditorTools.FILTERS) { activeTool = EditorTools.FILTERS }
-                        EditorToolItem(Icons.Default.Crop, "Crop", activeTool == EditorTools.CROP) { activeTool = EditorTools.CROP }
-                        EditorToolItem(Icons.Default.TextFields, "Text", activeTool == EditorTools.TEXT) { activeTool = EditorTools.TEXT }
-                        EditorToolItem(Icons.Default.Category, "Shapes", activeTool == EditorTools.SHAPES) { activeTool = EditorTools.SHAPES }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        EditorToolItem(
+                            Icons.Default.Tune,
+                            "Adjust",
+                            activeTool == EditorTools.ADJUST
+                        ) { activeTool = EditorTools.ADJUST }
+                        EditorToolItem(
+                            Icons.Default.AutoAwesome,
+                            "Filter",
+                            activeTool == EditorTools.FILTERS
+                        ) { activeTool = EditorTools.FILTERS }
+                        EditorToolItem(
+                            Icons.Default.Crop,
+                            "Crop",
+                            activeTool == EditorTools.CROP
+                        ) { activeTool = EditorTools.CROP }
+                        EditorToolItem(
+                            Icons.Default.TextFields,
+                            "Text",
+                            activeTool == EditorTools.TEXT
+                        ) { activeTool = EditorTools.TEXT }
+                        EditorToolItem(
+                            Icons.Default.Category,
+                            "Shapes",
+                            activeTool == EditorTools.SHAPES
+                        ) { activeTool = EditorTools.SHAPES }
                     }
-                    Box(modifier = Modifier.height(240.dp).padding(horizontal = 16.dp)) {
+                    Box(modifier = Modifier
+                        .height(240.dp)
+                        .padding(horizontal = 16.dp)) {
                         when (activeTool) {
                             EditorTools.ADJUST -> AdjustPanel(currentSettings) { updateSettings(it) }
                             EditorTools.FILTERS -> FilterRow(photoUri) { m, n ->
@@ -293,6 +361,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                     currentSettings.copy(selectedFilter = m, filterName = n)
                                 )
                             }
+
                             EditorTools.CROP -> CropPanel(currentSettings) { updateLiveSettings(it) }
                             EditorTools.TEXT -> TextControlPanel(
                                 settings = currentSettings,
@@ -300,6 +369,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                 onUpdate = { updateSettings(it) },
                                 onClose = { selectedTextId = null }
                             )
+
                             EditorTools.SHAPES -> ShapeControlPanel(
                                 settings = currentSettings,
                                 selectedShapeId = selectedShapeId,
@@ -309,6 +379,26 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         }
                     }
                 }
+            }
+        }
+
+        if (showExportDialog) {
+            IosExportDialog(
+                onDismiss = { showExportDialog = false },
+                onGoToGallery = {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        type = "image/*"
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                    showExportDialog = false
+                }
+            )
+        }
+
+        if (isExporting) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = iOSBlue)
             }
         }
     }
