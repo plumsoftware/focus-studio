@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -44,13 +45,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import ru.plumsoftware.focusstudio.R
+import ru.plumsoftware.focusstudio.ui.theme.AppleGray
+import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.Routes
+import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
+import ru.plumsoftware.focusstudio.ui.theme.iOSPurple
 
 @Composable
 fun WelcomeScreen(navController: NavController) {
 
-    // Лаунчер для выбора фото
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -63,9 +67,11 @@ fun WelcomeScreen(navController: NavController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            // Заменяем системный фон на жесткий черный в стиле iOS
+            .background(Color.Black)
             .statusBarsPadding()
-            .padding(FocusDesign.paddingLarge),
+            .padding(FocusDesign.paddingLarge)
+            .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Переключатель языков
@@ -78,17 +84,17 @@ fun WelcomeScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(FocusDesign.mainSpacing))
 
-        // Badge
+        // Badge "Профессиональная студия"
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = Color.Transparent,
-            border = BorderStroke(FocusDesign.badgeStrokeWidth, MaterialTheme.colorScheme.primary),
+            border = BorderStroke(FocusDesign.badgeStrokeWidth, iOSBlue),
             modifier = Modifier.padding(bottom = FocusDesign.paddingMedium)
         ) {
             Text(
                 text = stringResource(R.string.prof_studio).uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = iOSBlue,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
         }
@@ -97,13 +103,14 @@ fun WelcomeScreen(navController: NavController) {
         Text(
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.onBackground
+            color = Color.White
         )
 
         Text(
             text = stringResource(R.string.subtitle),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
+            color = AppleGray,
             modifier = Modifier.padding(top = FocusDesign.paddingSmall)
         )
 
@@ -119,7 +126,7 @@ fun WelcomeScreen(navController: NavController) {
                 title = stringResource(R.string.video_title),
                 desc = stringResource(R.string.video_desc),
                 icon = Icons.Default.Videocam,
-                iconColor = MaterialTheme.colorScheme.primary,
+                iconColor = iOSBlue,
                 onClick = { navController.navigate(Routes.VIDEO_EDITOR) }
             )
             SelectionCard(
@@ -127,7 +134,7 @@ fun WelcomeScreen(navController: NavController) {
                 title = stringResource(R.string.photo_title),
                 desc = stringResource(R.string.photo_desc),
                 icon = Icons.Default.Image,
-                iconColor = MaterialTheme.colorScheme.secondary,
+                iconColor = iOSPurple,
                 onClick = {
                     photoPickerLauncher.launch("image/*")
                 }
@@ -136,7 +143,7 @@ fun WelcomeScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Нижние бейджи
+        // Нижние бейджи (4K RAW и т.д.)
         TechInfoRow()
     }
 }
@@ -155,7 +162,8 @@ fun SelectionCard(
             .height(FocusDesign.cardHeight)
             .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface
+        // Используем DarkSurface как во втором экране
+        color = DarkSurface
     ) {
         Column(
             modifier = Modifier.padding(FocusDesign.paddingMedium),
@@ -177,7 +185,11 @@ fun SelectionCard(
 
             Spacer(modifier = Modifier.height(FocusDesign.paddingLarge))
 
-            Text(text = title, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White
+            )
 
             Spacer(modifier = Modifier.height(FocusDesign.paddingSmall))
 
@@ -185,7 +197,7 @@ fun SelectionCard(
                 text = desc,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = AppleGray // Используем мягкий серый для описания
             )
         }
     }
@@ -204,14 +216,14 @@ fun TechInfoRow() {
                 Text(
                     text = stringResource(item),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = AppleGray
                 )
                 Box(
                     modifier = Modifier
                         .padding(top = 4.dp)
                         .width(FocusDesign.techUnderlineWidth)
                         .height(FocusDesign.techUnderlineHeight)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .background(AppleGray.copy(alpha = 0.3f))
                 )
             }
             if (index < techs.size - 1) {
@@ -223,11 +235,14 @@ fun TechInfoRow() {
 
 @Composable
 fun LanguageToggle() {
-    // В реальном приложении это состояние должно приходить из ViewModel или LocalLocale
     var selectedLanguage by remember { mutableStateOf("RU") }
 
     Row(
-        horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingSmall),
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.05f)) // Тонкая подложка для всего ряда
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingExtraSmall),
         verticalAlignment = Alignment.CenterVertically
     ) {
         LanguageButton(
@@ -249,25 +264,17 @@ private fun LanguageButton(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    // Цвета подложки в стиле iOS (размытый серый/белый с прозрачностью)
     val backgroundColor = if (isSelected) {
-        // На темном фоне это светло-серый с прозрачностью, на светлом — темнее
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+        Color.White.copy(alpha = 0.15f) // Светлее для активного
     } else {
         Color.Transparent
     }
 
-    // Цвет текста
-    val textColor = if (isSelected) {
-        MaterialTheme.colorScheme.onSurface
-    } else {
-        // Используем AppleGray (onSurfaceVariant) для неактивного состояния
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val textColor = if (isSelected) Color.White else AppleGray
 
     Box(
         modifier = Modifier
-            .size(FocusDesign.languageToggleSize) // 38.dp из ваших констант
+            .size(FocusDesign.languageToggleSize)
             .clip(CircleShape)
             .background(backgroundColor)
             .clickable { onClick() },
@@ -275,11 +282,9 @@ private fun LanguageButton(
     ) {
         Text(
             text = text,
-            // Используем типографику из темы (SF-Pro)
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                letterSpacing = 0.sp
+                fontSize = 13.sp
             ),
             color = textColor
         )
