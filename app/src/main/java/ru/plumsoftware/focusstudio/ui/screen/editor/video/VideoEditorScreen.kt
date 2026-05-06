@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.R
@@ -58,9 +59,12 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val context = LocalContext.current
 
     // ExoPlayer setup
+    // Внутри VideoEditorScreen при инициализации exoPlayer
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             videoUri?.let { setMediaItem(MediaItem.fromUri(it)) }
+            // Установка параметров для мгновенного поиска кадра (iOS style)
+            setSeekParameters(SeekParameters.CLOSEST_SYNC)
             prepare()
         }
     }
@@ -76,6 +80,22 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
             delay(16)
         }
     }
+
+    // Внутри VideoEditorScreen
+    LaunchedEffect(exoPlayer.duration) {
+        if (exoPlayer.duration > 0) {
+            // Устанавливаем конец по умолчанию, если он еще не задан
+            if (settings.endMs == 0L) {
+                settings = settings.copy(
+                    durationMs = exoPlayer.duration,
+                    endMs = exoPlayer.duration
+                )
+            }
+        }
+    }
+
+// В Scaffold -> Button (Обрезать) логика уже верная:
+// Она берет settings.startMs и settings.endMs и применяет ClippingConfiguration.
 
     DisposableEffect(Unit) {
         onDispose { exoPlayer.release() }
