@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.R
@@ -61,6 +62,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             videoUri?.let { setMediaItem(MediaItem.fromUri(it)) }
+            setSeekParameters(SeekParameters.CLOSEST_SYNC)
             prepare()
         }
     }
@@ -68,6 +70,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var settings by remember { mutableStateOf(VideoSettings()) }
     var currentPos by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(false) }
+    var lastSeekTime by remember { mutableLongStateOf(0L) }
 
     // Обновление позиции трекера во время игры
     LaunchedEffect(isPlaying) {
@@ -91,7 +94,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         },
         containerColor = Color.Black
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().navigationBarsPadding()) {
+        Column(Modifier.padding(padding).fillMaxSize()) {
 
             // 1. ПЛЕЕР
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -136,9 +139,13 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     VideoTimeline(
                         settings = settings.copy(durationMs = exoPlayer.duration.coerceAtLeast(0)),
                         currentPosition = currentPos,
-                        onSeek = {
-                            currentPos = it
-                            exoPlayer.seekTo(it)
+                        onSeek = { ms ->
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastSeekTime > 32) {
+                                exoPlayer.seekTo(ms)
+                                lastSeekTime = currentTime
+                            }
+                            currentPos = ms
                         },
                         onRangeChange = { start, end ->
                             settings = settings.copy(startMs = start, endMs = end)
@@ -150,9 +157,9 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     // Кнопка ОБРЕЗАТЬ
                     Button(
                         onClick = {
-                            // Логика "Обрезать": сдвигаем начало видео
                             val clipStart = settings.startMs
-                            val clipEnd = if(settings.endMs == 0L) exoPlayer.duration else settings.endMs
+                            val clipEnd = if (settings.endMs == 0L) exoPlayer.duration else settings.endMs
+                            val newDuration = (clipEnd - clipStart).coerceAtLeast(0L)
 
                             val mediaItem = MediaItem.Builder()
                                 .setUri(videoUri)
@@ -166,8 +173,14 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
 
                             exoPlayer.setMediaItem(mediaItem)
                             exoPlayer.prepare()
-                            settings = VideoSettings(durationMs = clipEnd - clipStart)
-                            currentPos = 0
+
+                            settings = VideoSettings(
+                                durationMs = newDuration,
+                                startMs = 0L,
+                                endMs = newDuration
+                            )
+                            currentPos = 0L
+                            exoPlayer.seekTo(0L)
                         },
                         modifier = Modifier.fillMaxWidth().height(FocusDesign.languageToggleSize),
                         colors = ButtonDefaults.buttonColors(containerColor = iOSBlue),
