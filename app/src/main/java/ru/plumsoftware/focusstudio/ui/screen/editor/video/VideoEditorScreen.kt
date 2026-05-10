@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
 import android.view.TextureView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -29,14 +31,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -66,6 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -77,6 +84,8 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorTopBar
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoTools
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
@@ -87,63 +96,108 @@ import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 @Composable
 fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val context = LocalContext.current
-    var currentFrameBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var videoAspectRatio by remember { mutableFloatStateOf(1f) }
+    var settings by remember { mutableStateOf(VideoSettings()) }
+    var currentPos by remember { mutableLongStateOf(0L) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var activeTool by remember { mutableStateOf(VideoTools.TIMELINE) }
 
-    // ExoPlayer setup
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            videoUri?.let { setMediaItem(MediaItem.fromUri(it)) }
             setSeekParameters(SeekParameters.CLOSEST_SYNC)
-
             addListener(object : androidx.media3.common.Player.Listener {
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                    if (videoSize.width > 0 && videoSize.height > 0) {
-                        videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
-                    }
+                    if (videoSize.width > 0) videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
                 }
             })
             prepare()
         }
     }
 
-    var settings by remember { mutableStateOf(VideoSettings()) }
-    var currentPos by remember { mutableLongStateOf(0L) }
-    var isPlaying by remember { mutableStateOf(false) }
-    var lastSeekTime by remember { mutableLongStateOf(0L) }
-
-    // Вкладки
-    var activeTool by remember { mutableStateOf(VideoTools.TIMELINE) }
+    var currentFrameBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     // Извлечение реального имени файла
     val fileName = remember(videoUri) {
         videoUri?.let { uri ->
             var name = "video.mp4"
-            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1 && cursor.moveToFirst()) {
-                    name = cursor.getString(nameIndex)
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1 && cursor.moveToFirst()) {
+                        name = cursor.getString(nameIndex)
+                    }
                 }
-            }
+            } catch (e: Exception) { e.printStackTrace() }
             name
         } ?: "Unknown.mp4"
     }
 
-    // Обновление позиции трекера во время игры
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            currentPos = exoPlayer.currentPosition
-            delay(16)
+    // ФУНКЦИЯ ОБНОВЛЕНИЯ ПЛЕЕРА И ГРАНИЦ (Вызывается при любом изменении клипов)
+    fun applyClipsChange(newClips: List<VideoClip>) {
+        val totalMs = newClips.sumOf { it.endMs - it.startMs }.coerceAtLeast(0L)
+
+        // 1. Обновляем настройки: ставим начало в 0, конец в новый максимум
+        settings = settings.copy(
+            clips = newClips,
+            durationMs = totalMs,
+            startMs = 0L,
+            endMs = totalMs
+        )
+
+        // 2. Обновляем плейлист в плеере
+        exoPlayer.clearMediaItems()
+        newClips.forEach { clip ->
+            val mediaItem = MediaItem.Builder()
+                .setUri(clip.uri)
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(clip.startMs)
+                        .setEndPositionMs(clip.endMs)
+                        .build()
+                ).build()
+            exoPlayer.addMediaItem(mediaItem)
+        }
+        exoPlayer.prepare()
+        exoPlayer.seekTo(0L)
+        currentPos = 0L
+    }
+
+    // Инициализация первым видео
+    LaunchedEffect(videoUri) {
+        if (videoUri != null && settings.clips.isEmpty()) {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, videoUri)
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
+            retriever.release()
+
+            val firstClip = VideoClip(uri = videoUri, durationMs = duration, endMs = duration)
+            applyClipsChange(listOf(firstClip))
         }
     }
 
-    LaunchedEffect(activeTool) {
-        if (activeTool == VideoTools.FILTERS && videoUri != null) {
+    // Обновляем превью при переключении на вкладку фильтров или при смене позиции в видео
+    LaunchedEffect(activeTool, currentPos) {
+        // Делаем это только если активна вкладка фильтров, чтобы не нагружать процессор зря
+        if (activeTool == VideoTools.FILTERS && settings.clips.isNotEmpty()) {
             val retriever = MediaMetadataRetriever()
             try {
-                retriever.setDataSource(context, videoUri)
-                val timeUs = exoPlayer.currentPosition * 1000
-                currentFrameBitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                // 1. Получаем индекс текущего клипа в плеере
+                val currentIndex = exoPlayer.currentMediaItemIndex
+                if (currentIndex < settings.clips.size) {
+                    val currentClipUri = settings.clips[currentIndex].uri
+
+                    // 2. Настраиваем ретривер на этот файл
+                    retriever.setDataSource(context, currentClipUri)
+
+                    // 3. Берем кадр из ТЕКУЩЕЙ позиции плеера (время в микросекундах)
+                    // Используем OPTION_CLOSEST_SYNC для точности
+                    val timeUs = exoPlayer.currentPosition * 1000
+                    val bitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+
+                    if (bitmap != null) {
+                        currentFrameBitmap = bitmap
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -152,174 +206,102 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
+    // Добавление нового клипа (склейка)
+    val addClipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { newUri ->
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, newUri)
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
+            retriever.release()
+
+            val newClip = VideoClip(uri = newUri, durationMs = duration, endMs = duration)
+            applyClipsChange(settings.clips + newClip) // Добавляем и пересчитываем границы
+        }
     }
 
+    // Обновление позиции
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            // Считаем абсолютную позицию в плейлисте
+            var totalPos = 0L
+            val currentIndex = exoPlayer.currentMediaItemIndex
+            for (i in 0 until currentIndex) {
+                totalPos += (settings.clips[i].endMs - settings.clips[i].startMs)
+            }
+            currentPos = totalPos + exoPlayer.currentPosition
+            delay(16)
+        }
+    }
+
+    DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
+
     Scaffold(
-        topBar = {
-            EditorTopBar(
-                fileName = fileName,
-                onCancel = onCancel,
-                onExport = { /* Логика экспорта видео */ }
-            )
-        },
+        topBar = { EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {}) },
         containerColor = Color.Black
     ) { padding ->
-        Column(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
+        Column(Modifier.padding(padding).fillMaxSize().navigationBarsPadding()) {
 
-            // 1. ПЛЕЕР + ФИЛЬТР-ОВЕРЛЕЙ
-            Box(Modifier
-                .weight(1f)
-                .fillMaxWidth(), contentAlignment = Alignment.Center) {
+            // 1. ПЛЕЕР
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize(0.9f)
                         .aspectRatio(videoAspectRatio, matchHeightConstraintsFirst = true)
                         .clip(RoundedCornerShape(12.dp))
-                        .graphicsLayer {
-                            // ПРИМЕНЕНИЕ ФИЛЬТРА К ВИДЕО (Android 12+)
-                            if (settings.selectedFilter != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                val androidMatrix =
-                                    android.graphics.ColorMatrix(settings.selectedFilter!!.values)
-                                renderEffect =
-                                    android.graphics.RenderEffect.createColorFilterEffect(
-                                        ColorMatrixColorFilter(androidMatrix)
-                                    ).asComposeRenderEffect()
-                            }
-                        }
                 ) {
-                    // Используем TextureView напрямую для 100% совместимости с фильтрами
                     AndroidView(
-                        factory = { ctx ->
-                            TextureView(ctx).apply {
-                                // Привязываем TextureView к плееру
-                                exoPlayer.setVideoTextureView(this)
-                            }
-                        },
+                        factory = { ctx -> TextureView(ctx).apply { exoPlayer.setVideoTextureView(this) } },
                         modifier = Modifier.fillMaxSize()
                     )
-
-                    // Оверлей для старых версий Android (ниже 12)
-                    if (settings.selectedFilter != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                        Canvas(Modifier.fillMaxSize()) {
-                            drawRect(
-                                color = Color.White.copy(alpha = 0.01f),
-                                colorFilter = ColorFilter.colorMatrix(settings.selectedFilter!!)
-                            )
-                        }
-                    }
                 }
 
-                // Кнопка Play/Pause
                 IconButton(
-                    onClick = {
-                        isPlaying = !isPlaying
-                        exoPlayer.playWhenReady = isPlaying
-                    },
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(Color.Black.copy(0.4f), CircleShape)
+                    onClick = { isPlaying = !isPlaying; exoPlayer.playWhenReady = isPlaying },
+                    modifier = Modifier.size(64.dp).background(Color.Black.copy(0.4f), CircleShape)
                 ) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        null,
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White)
                 }
             }
 
-            // 2. ПАНЕЛЬ ИНСТРУМЕНТОВ (iOS Style)
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = DarkSurface,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-            ) {
+            // 2. ИНСТРУМЕНТЫ
+            Surface(Modifier.fillMaxWidth(), color = DarkSurface, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
                 Column {
-                    // ВКЛАДКИ
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        EditorToolItem(
-                            icon = Icons.Default.History,
-                            label = "Timeline",
-                            isSelected = activeTool == VideoTools.TIMELINE
-                        ) { activeTool = VideoTools.TIMELINE }
-
-                        EditorToolItem(
-                            icon = Icons.Default.AutoAwesome,
-                            label = "Filters",
-                            isSelected = activeTool == VideoTools.FILTERS
-                        ) { activeTool = VideoTools.FILTERS }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        EditorToolItem(Icons.Default.History, "Timeline", activeTool == VideoTools.TIMELINE) { activeTool = VideoTools.TIMELINE }
+                        EditorToolItem(Icons.Default.VideoLibrary, "Clips", activeTool == VideoTools.CLIPS) { activeTool = VideoTools.CLIPS }
+                        EditorToolItem(Icons.Default.AutoAwesome, "Filters", activeTool == VideoTools.FILTERS) { activeTool = VideoTools.FILTERS }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .height(260.dp)
-                            .padding(horizontal = 16.dp)
-                    ) {
+                    Box(Modifier.height(260.dp).padding(horizontal = 16.dp)) {
                         when (activeTool) {
                             VideoTools.TIMELINE -> {
                                 Column {
-                                    SectionTitle(stringResource(R.string.label_timeline))
+                                    SectionTitle("Timeline")
                                     VideoTimeline(
-                                        settings = settings.copy(
-                                            durationMs = exoPlayer.duration.coerceAtLeast(
-                                                0
-                                            )
-                                        ),
+                                        settings = settings,
                                         currentPosition = currentPos,
-                                        onSeek = { ms ->
-                                            if (System.currentTimeMillis() - lastSeekTime > 32) {
-                                                exoPlayer.seekTo(ms)
-                                                lastSeekTime = System.currentTimeMillis()
-                                            }
-                                            currentPos = ms
-                                        },
-                                        onRangeChange = { s, e ->
-                                            settings = settings.copy(startMs = s, endMs = e)
-                                        }
+                                        onSeek = { ms -> exoPlayer.seekTo(ms) },
+                                        onRangeChange = { s, e -> settings = settings.copy(startMs = s, endMs = e) },
+                                        onClipsChange = { applyClipsChange(it) }
                                     )
                                     Spacer(Modifier.height(16.dp))
                                     TrimButton(
                                         onClick = {
-                                            // Логика обрезки (существующая)
-                                            val clipStart = settings.startMs
-                                            val clipEnd =
-                                                if (settings.endMs == 0L) exoPlayer.duration else settings.endMs
-                                            val newDuration = clipEnd - clipStart
-
-                                            val mediaItem = MediaItem.Builder()
-                                                .setUri(videoUri)
-                                                .setClippingConfiguration(
-                                                    MediaItem.ClippingConfiguration.Builder()
-                                                        .setStartPositionMs(clipStart)
-                                                        .setEndPositionMs(clipEnd).build()
-                                                )
-                                                .build()
-
-                                            exoPlayer.setMediaItem(mediaItem)
-                                            exoPlayer.prepare()
-                                            settings = settings.copy(
-                                                durationMs = newDuration,
-                                                startMs = 0L,
-                                                endMs = newDuration
-                                            )
-                                            currentPos = 0L
-                                            exoPlayer.seekTo(0L)
+                                            val trimmed = trimClipsLogic(settings.clips, settings.startMs, settings.endMs)
+                                            applyClipsChange(trimmed)
                                         }
                                     )
                                 }
                             }
-
+                            VideoTools.CLIPS ->
+                                ClipsPanel(
+                                    settings = settings,
+                                    onAddClick = { addClipLauncher.launch("video/*") },
+                                    onRemoveClip = { index ->
+                                        val newList = settings.clips.toMutableList().apply { removeAt(index) }
+                                        applyClipsChange(newList)
+                                    }
+                                )
                             VideoTools.FILTERS -> {
                                 Column {
                                     SectionTitle("Фильтры")
@@ -327,10 +309,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                         previewBitmap = currentFrameBitmap,
                                         currentFilterName = settings.filterName,
                                         onFilterSelected = { matrix, name ->
-                                            settings = settings.copy(
-                                                selectedFilter = matrix,
-                                                filterName = name
-                                            )
+                                            settings = settings.copy(selectedFilter = matrix, filterName = name)
                                         }
                                     )
                                 }
@@ -340,20 +319,6 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-@Composable
-fun TrimButton(onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = iOSBlue),
-        shape = RoundedCornerShape(FocusDesign.cornerMedium)
-    ) {
-        Text("ОБРЕЗАТЬ", fontWeight = FontWeight.Bold)
     }
 }
 
@@ -412,6 +377,65 @@ fun VideoFilterRow(
                     modifier = Modifier.padding(top = 4.dp),
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun ClipsPanel(
+    settings: VideoSettings,
+    onAddClick: () -> Unit,
+    onRemoveClip: (Int) -> Unit
+) {
+    Column {
+        SectionTitle("Клипы проекта")
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            itemsIndexed(settings.clips) { index, clip ->
+                Box(
+                    modifier = Modifier
+                        .size(110.dp, 70.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(DarkSurface)
+                        .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(12.dp))
+                ) {
+                    Text(
+                        "Клип ${index + 1}",
+                        Modifier.align(Alignment.Center),
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
+                    // Кнопка удаления (Маленький красный крестик в углу)
+                    Icon(
+                        Icons.Default.Cancel,
+                        null,
+                        tint = Color.Red.copy(0.7f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(18.dp)
+                            .clickable { onRemoveClip(index) }
+                    )
+                }
+            }
+
+            item {
+                Surface(
+                    onClick = onAddClick,
+                    modifier = Modifier.size(70.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(0.05f)
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        null,
+                        tint = iOSBlue,
+                        modifier = Modifier.padding(20.dp)
+                    )
+                }
             }
         }
     }

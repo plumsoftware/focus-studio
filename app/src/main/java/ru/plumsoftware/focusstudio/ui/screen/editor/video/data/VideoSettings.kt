@@ -9,5 +9,6 @@ data class VideoSettings(
     val isPlaying: Boolean = false,
 
     val selectedFilter: ColorMatrix? = null,
-    val filterName: String = "None"
+    val filterName: String = "None",
+    val clips: List<VideoClip> = emptyList(),
 )

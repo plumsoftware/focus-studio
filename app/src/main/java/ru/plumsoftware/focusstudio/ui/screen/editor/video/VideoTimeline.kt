@@ -3,6 +3,7 @@ package ru.plumsoftware.focusstudio.ui.screen.editor.video
 import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.KeyboardCommandKey
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,6 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.DragSource
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
@@ -51,194 +60,114 @@ fun VideoTimeline(
     settings: VideoSettings,
     currentPosition: Long,
     onSeek: (Long) -> Unit,
-    onRangeChange: (Long, Long) -> Unit
+    onRangeChange: (Long, Long) -> Unit,
+    onClipsChange: (List<VideoClip>) -> Unit
 ) {
-    key(settings.durationMs) {
-        val duration = settings.durationMs.coerceAtLeast(1L)
-        val actualEndMs = if (settings.endMs == 0L) settings.durationMs else settings.endMs
+    val totalDuration = settings.clips.sumOf { it.endMs - it.startMs }.coerceAtLeast(1L)
+
+    key(totalDuration) {
+        val actualEndMs = if (settings.endMs <= 0L) totalDuration else settings.endMs
 
         val localStartMs = remember { mutableLongStateOf(settings.startMs) }
         val localEndMs = remember { mutableLongStateOf(actualEndMs) }
         val localTrackerPos = remember { mutableLongStateOf(currentPosition) }
 
-        // Флаги перетаскивания (для показа бабла)
-        var isDraggingTracker by remember { mutableStateOf(false) }
-        var isDraggingHandle by remember { mutableStateOf(false) }
-        val isAnyDragging = isDraggingTracker || isDraggingHandle
+        var isDragging by remember { mutableStateOf(false) }
 
         LaunchedEffect(currentPosition) {
-            if (!isAnyDragging) {
-                localTrackerPos.longValue = currentPosition
-            }
+            if (!isDragging) localTrackerPos.longValue = currentPosition
         }
 
-        Column(modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            // Таймкоды
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    formatTimeSmart(localTrackerPos.longValue, duration),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Text(
-                    formatTimeSmart(duration, duration),
-                    color = Color.Gray,
-                    style = MaterialTheme.typography.labelSmall
-                )
+                Text(formatTimeSmart(localTrackerPos.longValue, totalDuration), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                Text(formatTimeSmart(totalDuration, totalDuration), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             }
 
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(90.dp) // Увеличили высоту контейнера под бабл
-            ) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(90.dp)) {
                 val widthPx = constraints.maxWidth.toFloat()
                 val density = LocalDensity.current
 
-                fun pxToMs(px: Float) = (px / widthPx * duration).toLong().coerceIn(0, duration)
-                fun msToPx(ms: Long) =
-                    (ms.toFloat() / duration.toFloat()).coerceIn(0f, 1f) * widthPx
+                fun msToPx(ms: Long) = (ms.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) * widthPx
+                fun pxToMs(px: Float) = (px / widthPx * totalDuration).toLong().coerceIn(0, totalDuration)
 
                 val startPx = msToPx(localStartMs.longValue)
                 val endPx = msToPx(localEndMs.longValue)
                 val trackerPx = msToPx(localTrackerPos.longValue)
 
-                // --- ИНФО-БАБЛ ---
-                // Показываем только если что-то тянем
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isAnyDragging,
-                    enter = androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.fadeOut(),
-                    modifier = Modifier
-                        .offset {
-                            // Центрируем бабл над трекером и ограничиваем краями экрана
-                            val bubbleWidth = 60.dp.toPx()
-                            val xOff = (trackerPx - bubbleWidth / 2)
-                                .coerceIn(0f, widthPx - bubbleWidth)
-                            IntOffset(xOff.toInt(), 0)
-                        }
-                ) {
-                    Surface(
-                        color = Color(0xFF007AFF), // Цвет iOS Blue
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.shadow(elevation = 4.dp)
-                    ) {
-                        Text(
-                            text = formatTimeSmart(localTrackerPos.longValue, duration),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                // ТАЙМЛАЙН КОНТЕЙНЕР
+                Box(Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter)) {
+                    // Подложка
+                    Box(Modifier.fillMaxWidth().height(32.dp).align(Alignment.Center).background(Color.White.copy(0.1f), CircleShape))
+
+                    // РИСУЕМ СЕГМЕНТЫ КЛИПОВ
+                    var accumulatedMs = 0L
+                    settings.clips.forEachIndexed { index, clip ->
+                        val clipDur = clip.endMs - clip.startMs
+                        val clipWidth = (clipDur.toFloat() / totalDuration) * widthPx
+                        val clipStartOff = (accumulatedMs.toFloat() / totalDuration) * widthPx
+
+                        Box(
+                            Modifier
+                                .offset { IntOffset(clipStartOff.toInt(), 16.dp.toPx().toInt()) }
+                                .width(with(density) { clipWidth.toDp() })
+                                .height(32.dp)
+                                .background(if (index % 2 == 0) iOSBlue.copy(0.1f) else Color.White.copy(0.05f))
+                                .border(0.5.dp, Color.White.copy(0.2f))
                         )
+                        accumulatedMs += clipDur
                     }
-                }
 
-                // Вложенный контейнер для самого таймлайна (смещен вниз под бабл)
-                Box(Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .align(Alignment.BottomCenter)) {
-
-                    // 1. Фон
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(32.dp)
-                            .align(Alignment.Center)
-                            .background(Color.White.copy(0.1f), CircleShape)
-                    )
-
-                    // 2. Синяя зона
+                    // СИНЯЯ ЗОНА ОБРЕЗКИ ПОВЕРХ ВСЕГО
                     val regionWidth = (endPx - startPx).coerceAtLeast(0f)
                     Box(
                         Modifier
                             .offset { IntOffset(startPx.toInt(), 16.dp.run { toPx().toInt() }) }
                             .width(with(density) { regionWidth.toDp() })
                             .height(32.dp)
-                            .background(Color(0xFF007AFF).copy(0.2f))
-                            .border(2.dp, Color(0xFF007AFF), RoundedCornerShape(4.dp))
+                            .background(iOSBlue.copy(0.2f))
+                            .border(2.dp, iOSBlue, RoundedCornerShape(4.dp))
                     )
 
-                    // 3. Левая ручка
+                    // РУЧКИ
                     Handle(offsetPx = startPx) { deltaX ->
-                        isDraggingHandle = true
+                        isDragging = true
                         val newStart = pxToMs(msToPx(localStartMs.longValue) + deltaX).coerceAtMost(localEndMs.longValue - 500)
                         localStartMs.longValue = newStart
-
                         localTrackerPos.longValue = newStart
-
                         onSeek(newStart)
                         onRangeChange(newStart, localEndMs.longValue)
                     }
-
-                    // 4. Правая ручка
                     Handle(offsetPx = endPx) { deltaX ->
-                        isDraggingHandle = true
-                        val newEnd = pxToMs(msToPx(localEndMs.longValue) + deltaX)
-                            .coerceAtLeast(localStartMs.longValue + 500)
+                        isDragging = true
+                        val newEnd = pxToMs(msToPx(localEndMs.longValue) + deltaX).coerceAtLeast(localStartMs.longValue + 500)
                         localEndMs.longValue = newEnd
-
                         onSeek(newEnd)
                         onRangeChange(localStartMs.longValue, newEnd)
                     }
 
-                    // 5. ТРЕКЕР
-                    val trackerHeight = 64.dp
-                    val circleSize = 12.dp
-
+                    // ТРЕКЕР ВРЕМЕНИ
                     Box(
                         Modifier
-                            .offset {
-                                IntOffset(
-                                    trackerPx.toInt() - (circleSize.toPx() / 2).toInt(),
-                                    ((64.dp - trackerHeight) / 2).run { toPx().toInt() }
-                                )
-                            }
-                            .width(circleSize)
-                            .height(trackerHeight)
-                            .pointerInput(Unit) {
+                            .offset { IntOffset(trackerPx.toInt() - 6, 0) }
+                            .size(12.dp, 64.dp)
+                            .pointerInput(totalDuration) {
                                 detectDragGestures(
-                                    onDragStart = { isDraggingTracker = true },
-                                    onDragEnd = {
-                                        isDraggingTracker = false; isDraggingHandle = false
-                                    },
-                                    onDragCancel = {
-                                        isDraggingTracker = false; isDraggingHandle = false
-                                    },
+                                    onDragStart = { isDragging = true },
+                                    onDragEnd = { isDragging = false },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        val newPos =
-                                            pxToMs(msToPx(localTrackerPos.longValue) + dragAmount.x)
-                                                .coerceIn(
-                                                    localStartMs.longValue,
-                                                    localEndMs.longValue
-                                                )
+                                        val newPos = pxToMs(msToPx(localTrackerPos.longValue) + dragAmount.x)
                                         localTrackerPos.longValue = newPos
                                         onSeek(newPos)
                                     }
                                 )
                             }
                     ) {
-                        Box(
-                            Modifier
-                                .width(2.dp)
-                                .fillMaxHeight()
-                                .align(Alignment.Center)
-                                .background(Color.White)
-                        )
-                        Box(
-                            Modifier
-                                .size(circleSize)
-                                .align(Alignment.TopCenter)
-                                .background(Color.White, CircleShape)
-                        )
-                        Box(
-                            Modifier
-                                .size(circleSize)
-                                .align(Alignment.BottomCenter)
-                                .background(Color.White, CircleShape)
-                        )
+                        Box(Modifier.width(2.dp).fillMaxHeight().background(Color.White).align(Alignment.Center))
+                        Box(Modifier.size(12.dp).background(Color.White, CircleShape).align(Alignment.TopCenter))
+                        Box(Modifier.size(12.dp).background(Color.White, CircleShape).align(Alignment.BottomCenter))
                     }
                 }
             }
