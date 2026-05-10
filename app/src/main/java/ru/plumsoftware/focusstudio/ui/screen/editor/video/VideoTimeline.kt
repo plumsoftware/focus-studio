@@ -163,10 +163,11 @@ fun VideoTimeline(
                     // 3. Левая ручка
                     Handle(offsetPx = startPx) { deltaX ->
                         isDraggingHandle = true
-                        val newStart = pxToMs(msToPx(localStartMs.longValue) + deltaX)
-                            .coerceAtMost(localEndMs.longValue - 500)
+                        val newStart = pxToMs(msToPx(localStartMs.longValue) + deltaX).coerceAtMost(localEndMs.longValue - 500)
                         localStartMs.longValue = newStart
+
                         localTrackerPos.longValue = newStart
+
                         onSeek(newStart)
                         onRangeChange(newStart, localEndMs.longValue)
                     }
@@ -177,7 +178,7 @@ fun VideoTimeline(
                         val newEnd = pxToMs(msToPx(localEndMs.longValue) + deltaX)
                             .coerceAtLeast(localStartMs.longValue + 500)
                         localEndMs.longValue = newEnd
-                        localTrackerPos.longValue = newEnd
+
                         onSeek(newEnd)
                         onRangeChange(localStartMs.longValue, newEnd)
                     }
@@ -268,14 +269,6 @@ private fun Handle(offsetPx: Float, onDrag: (Float) -> Unit) {
             .size(6.dp, 24.dp)
             .background(Color.White, CircleShape))
     }
-}
-
-@SuppressLint("DefaultLocale")
-fun formatTime(ms: Long): String {
-    val totalSecs = ms / 1000
-    val mins = totalSecs / 60
-    val secs = totalSecs % 60
-    return String.format("%02d:%02d", mins, secs)
 }
 
 @SuppressLint("DefaultLocale")
