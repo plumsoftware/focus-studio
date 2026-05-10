@@ -105,9 +105,21 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             setSeekParameters(SeekParameters.CLOSEST_SYNC)
+
             addListener(object : androidx.media3.common.Player.Listener {
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                    if (videoSize.width > 0) videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
+                    if (videoSize.width > 0) videoAspectRatio =
+                        videoSize.width.toFloat() / videoSize.height.toFloat()
+                }
+
+                // ИСПРАВЛЕНИЕ: Автоматический прыжок в начало по окончании (п. 1)
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                        isPlaying = false
+                        this@apply.playWhenReady = false
+                        this@apply.seekTo(0, 0)
+                        currentPos = 0L
+                    }
                 }
             })
             prepare()
@@ -120,16 +132,12 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val fileName = remember(videoUri) {
         videoUri?.let { uri ->
             var name = "video.mp4"
-            try {
-                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex != -1 && cursor.moveToFirst()) {
-                        name = cursor.getString(nameIndex)
-                    }
-                }
-            } catch (e: Exception) { e.printStackTrace() }
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1 && cursor.moveToFirst()) name = cursor.getString(nameIndex)
+            }
             name
-        } ?: "Unknown.mp4"
+        } ?: "Project.mp4"
     }
 
     // ФУНКЦИЯ ОБНОВЛЕНИЯ ПЛЕЕРА И ГРАНИЦ (Вызывается при любом изменении клипов)
@@ -162,12 +170,48 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         currentPos = 0L
     }
 
+    // Хелпер для поиска времени по всем клипам (чтобы не прыгало ко второму клипу)
+    fun globalSeek(ms: Long) {
+        var accumulated = 0L
+        for (i in settings.clips.indices) {
+            val clipDuration = settings.clips[i].endMs - settings.clips[i].startMs
+            if (ms <= accumulated + clipDuration) {
+                exoPlayer.seekTo(i, (ms - accumulated) + settings.clips[i].startMs)
+                return
+            }
+            accumulated += clipDuration
+        }
+    }
+
+    fun refreshPlaylist() {
+        val currentMs = exoPlayer.currentPosition
+        val currentIndex = exoPlayer.currentMediaItemIndex
+
+        exoPlayer.clearMediaItems()
+        settings.clips.forEach { clip ->
+            val mediaItem = MediaItem.Builder()
+                .setUri(clip.uri)
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(clip.startMs)
+                        .setEndPositionMs(if (clip.endMs <= 0) clip.durationMs else clip.endMs)
+                        .build()
+                ).build()
+            exoPlayer.addMediaItem(mediaItem)
+        }
+        exoPlayer.prepare()
+        // Возвращаем плеер на место после обновления
+        if (settings.clips.isNotEmpty()) exoPlayer.seekTo(currentIndex, currentMs)
+    }
+
     // Инициализация первым видео
     LaunchedEffect(videoUri) {
         if (videoUri != null && settings.clips.isEmpty()) {
             val retriever = MediaMetadataRetriever()
             retriever.setDataSource(context, videoUri)
-            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
+            val duration =
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong()
+                    ?: 0L
             retriever.release()
 
             val firstClip = VideoClip(uri = videoUri, durationMs = duration, endMs = duration)
@@ -192,7 +236,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     // 3. Берем кадр из ТЕКУЩЕЙ позиции плеера (время в микросекундах)
                     // Используем OPTION_CLOSEST_SYNC для точности
                     val timeUs = exoPlayer.currentPosition * 1000
-                    val bitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    val bitmap =
+                        retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
                     if (bitmap != null) {
                         currentFrameBitmap = bitmap
@@ -207,25 +252,32 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     }
 
     // Добавление нового клипа (склейка)
-    val addClipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { newUri ->
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, newUri)
-            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
-            retriever.release()
-
-            val newClip = VideoClip(uri = newUri, durationMs = duration, endMs = duration)
-            applyClipsChange(settings.clips + newClip) // Добавляем и пересчитываем границы
+    val addClipLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { newUri ->
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, newUri)
+                val duration =
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLong() ?: 0L
+                retriever.release()
+                settings = settings.copy(
+                    clips = settings.clips + VideoClip(
+                        uri = newUri,
+                        durationMs = duration,
+                        endMs = duration
+                    )
+                )
+                refreshPlaylist()
+            }
         }
-    }
 
-    // Обновление позиции
+    // Позиция трекера
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
-            // Считаем абсолютную позицию в плейлисте
             var totalPos = 0L
-            val currentIndex = exoPlayer.currentMediaItemIndex
-            for (i in 0 until currentIndex) {
+            val idx = exoPlayer.currentMediaItemIndex
+            for (i in 0 until idx) {
                 totalPos += (settings.clips[i].endMs - settings.clips[i].startMs)
             }
             currentPos = totalPos + exoPlayer.currentPosition
@@ -239,40 +291,100 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         topBar = { EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {}) },
         containerColor = Color.Black
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().navigationBarsPadding()) {
+        Column(Modifier
+            .padding(padding)
+            .fillMaxSize()) {
 
             // 1. ПЛЕЕР
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier
+                .weight(1f)
+                .fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize(0.9f)
                         .aspectRatio(videoAspectRatio, matchHeightConstraintsFirst = true)
                         .clip(RoundedCornerShape(12.dp))
+                        .graphicsLayer {
+                            // ПРИМЕНЕНИЕ ФИЛЬТРА (API 31+)
+                            if (settings.selectedFilter != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                renderEffect =
+                                    android.graphics.RenderEffect.createColorFilterEffect(
+                                        ColorMatrixColorFilter(android.graphics.ColorMatrix(settings.selectedFilter!!.values))
+                                    ).asComposeRenderEffect()
+                            } else {
+                                renderEffect = null
+                            }
+                        }
                 ) {
                     AndroidView(
-                        factory = { ctx -> TextureView(ctx).apply { exoPlayer.setVideoTextureView(this) } },
+                        factory = { ctx ->
+                            TextureView(ctx).apply {
+                                exoPlayer.setVideoTextureView(
+                                    this
+                                )
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    // Fallback для старых Android (Overlay)
+                    if (settings.selectedFilter != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawRect(
+                                color = Color.Black.copy(alpha = 0.01f),
+                                colorFilter = ColorFilter.colorMatrix(settings.selectedFilter!!)
+                            )
+                        }
+                    }
                 }
 
                 IconButton(
                     onClick = { isPlaying = !isPlaying; exoPlayer.playWhenReady = isPlaying },
-                    modifier = Modifier.size(64.dp).background(Color.Black.copy(0.4f), CircleShape)
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color.Black.copy(0.4f), CircleShape)
                 ) {
-                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White)
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        null,
+                        tint = Color.White
+                    )
                 }
             }
 
             // 2. ИНСТРУМЕНТЫ
-            Surface(Modifier.fillMaxWidth(), color = DarkSurface, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+            Surface(
+                Modifier.fillMaxWidth(),
+                color = DarkSurface,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            ) {
                 Column {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        EditorToolItem(Icons.Default.History, "Timeline", activeTool == VideoTools.TIMELINE) { activeTool = VideoTools.TIMELINE }
-                        EditorToolItem(Icons.Default.VideoLibrary, "Clips", activeTool == VideoTools.CLIPS) { activeTool = VideoTools.CLIPS }
-                        EditorToolItem(Icons.Default.AutoAwesome, "Filters", activeTool == VideoTools.FILTERS) { activeTool = VideoTools.FILTERS }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        EditorToolItem(
+                            Icons.Default.History,
+                            "Timeline",
+                            activeTool == VideoTools.TIMELINE
+                        ) { activeTool = VideoTools.TIMELINE }
+                        EditorToolItem(
+                            Icons.Default.VideoLibrary,
+                            "Clips",
+                            activeTool == VideoTools.CLIPS
+                        ) { activeTool = VideoTools.CLIPS }
+                        EditorToolItem(
+                            Icons.Default.AutoAwesome,
+                            "Filters",
+                            activeTool == VideoTools.FILTERS
+                        ) { activeTool = VideoTools.FILTERS }
                     }
 
-                    Box(Modifier.height(260.dp).padding(horizontal = 16.dp)) {
+                    Box(Modifier
+                        .height(220.dp)
+                        .padding(horizontal = 16.dp)) {
                         when (activeTool) {
                             VideoTools.TIMELINE -> {
                                 Column {
@@ -280,28 +392,35 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                     VideoTimeline(
                                         settings = settings,
                                         currentPosition = currentPos,
-                                        onSeek = { ms -> exoPlayer.seekTo(ms) },
-                                        onRangeChange = { s, e -> settings = settings.copy(startMs = s, endMs = e) },
+                                        onSeek = { ms -> globalSeek(ms); currentPos = ms },
+                                        onRangeChange = { s, e ->
+                                            settings = settings.copy(startMs = s, endMs = e)
+                                        },
                                         onClipsChange = { applyClipsChange(it) }
                                     )
                                     Spacer(Modifier.height(16.dp))
-                                    TrimButton(
-                                        onClick = {
-                                            val trimmed = trimClipsLogic(settings.clips, settings.startMs, settings.endMs)
-                                            applyClipsChange(trimmed)
-                                        }
-                                    )
+                                    TrimButton(onClick = {
+                                        val trimmed = trimClipsLogic(
+                                            settings.clips,
+                                            settings.startMs,
+                                            settings.endMs
+                                        )
+                                        applyClipsChange(trimmed)
+                                    })
                                 }
                             }
+
                             VideoTools.CLIPS ->
                                 ClipsPanel(
                                     settings = settings,
                                     onAddClick = { addClipLauncher.launch("video/*") },
                                     onRemoveClip = { index ->
-                                        val newList = settings.clips.toMutableList().apply { removeAt(index) }
+                                        val newList =
+                                            settings.clips.toMutableList().apply { removeAt(index) }
                                         applyClipsChange(newList)
                                     }
                                 )
+
                             VideoTools.FILTERS -> {
                                 Column {
                                     SectionTitle("Фильтры")
@@ -309,7 +428,10 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                         previewBitmap = currentFrameBitmap,
                                         currentFilterName = settings.filterName,
                                         onFilterSelected = { matrix, name ->
-                                            settings = settings.copy(selectedFilter = matrix, filterName = name)
+                                            settings = settings.copy(
+                                                selectedFilter = matrix,
+                                                filterName = name
+                                            )
                                         }
                                     )
                                 }
@@ -344,6 +466,7 @@ fun VideoFilterRow(
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
+                // ИСПРАВЛЕНО: Теперь нажимается ВСЁ, включая "Нет" (null)
                 modifier = Modifier.clickable { onFilterSelected(matrix, name) }
             ) {
                 Box(
@@ -364,6 +487,7 @@ fun VideoFilterRow(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
+                            // Применяем фильтр к превью
                             colorFilter = matrix?.let { ColorFilter.colorMatrix(it) }
                         )
                     } else {
@@ -409,16 +533,17 @@ fun ClipsPanel(
                         fontSize = 12.sp
                     )
                     // Кнопка удаления (Маленький красный крестик в углу)
-                    Icon(
-                        Icons.Default.Cancel,
-                        null,
-                        tint = Color.Red.copy(0.7f),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(18.dp)
-                            .clickable { onRemoveClip(index) }
-                    )
+                    if (index != 0)
+                        Icon(
+                            Icons.Default.Cancel,
+                            null,
+                            tint = Color.Red.copy(0.7f),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(18.dp)
+                                .clickable { onRemoveClip(index) }
+                        )
                 }
             }
 

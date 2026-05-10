@@ -85,7 +85,7 @@ fun VideoTimeline(
                 Text(formatTimeSmart(totalDuration, totalDuration), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             }
 
-            BoxWithConstraints(Modifier.fillMaxWidth().height(90.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(80.dp)) {
                 val widthPx = constraints.maxWidth.toFloat()
                 val density = LocalDensity.current
 
@@ -197,21 +197,5 @@ private fun Handle(offsetPx: Float, onDrag: (Float) -> Unit) {
         Box(Modifier
             .size(6.dp, 24.dp)
             .background(Color.White, CircleShape))
-    }
-}
-
-@SuppressLint("DefaultLocale")
-fun formatTimeSmart(ms: Long, totalDurationMs: Long): String {
-    val totalSeconds = ms / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-
-    return if (totalDurationMs >= 3600_000) {
-        // Если видео больше часа: HH:MM:SS
-        String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        // Если видео меньше часа: MM:SS
-        String.format("%02d:%02d", minutes, seconds)
     }
 }
