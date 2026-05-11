@@ -1,5 +1,6 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.video
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.ColorMatrixColorFilter
 import android.media.MediaMetadataRetriever
@@ -40,11 +41,13 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,12 +78,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorTopBar
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
@@ -102,23 +110,40 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var isPlaying by remember { mutableStateOf(false) }
     var activeTool by remember { mutableStateOf(VideoTools.TIMELINE) }
 
+    var isExporting by remember { mutableStateOf(false) }
+    var exportProgress by remember { mutableFloatStateOf(0f) }
+    var showExportDialog by remember { mutableStateOf(false) }
+
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
+        // 1. Создаем фабрику рендереров с поддержкой программного декодинга
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true) // ОЧЕНЬ ВАЖНО: разрешает переход на софт, если хард упал
+
+        ExoPlayer.Builder(context, renderersFactory).build().apply {
+            // Устанавливаем параметры поиска кадра
             setSeekParameters(SeekParameters.CLOSEST_SYNC)
 
-            addListener(object : androidx.media3.common.Player.Listener {
-                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                    if (videoSize.width > 0) videoAspectRatio =
-                        videoSize.width.toFloat() / videoSize.height.toFloat()
+            addListener(object : Player.Listener {
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    if (videoSize.width > 0) videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
                 }
 
-                // ИСПРАВЛЕНИЕ: Автоматический прыжок в начало по окончании (п. 1)
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                    if (playbackState == Player.STATE_ENDED) {
                         isPlaying = false
-                        this@apply.playWhenReady = false
-                        this@apply.seekTo(0, 0)
+                        playWhenReady = false
+                        seekTo(0, 0)
                         currentPos = 0L
+                    }
+                }
+
+                // ЛОВИМ ОШИБКИ ДЕКОДЕРА
+                override fun onPlayerError(error: PlaybackException) {
+                    if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED) {
+                        // Если декодер сдох, пробуем переподготовить плеер
+                        prepare()
+                        play()
                     }
                 }
             })
@@ -127,6 +152,9 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     }
 
     var currentFrameBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val audioPlayer = remember {
+        ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_ONE }
+    }
 
     // Извлечение реального имени файла
     val fileName = remember(videoUri) {
@@ -144,7 +172,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     fun applyClipsChange(newClips: List<VideoClip>) {
         val totalMs = newClips.sumOf { it.endMs - it.startMs }.coerceAtLeast(0L)
 
-        // 1. Обновляем настройки: ставим начало в 0, конец в новый максимум
+        exoPlayer.stop()
+
         settings = settings.copy(
             clips = newClips,
             durationMs = totalMs,
@@ -152,7 +181,6 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
             endMs = totalMs
         )
 
-        // 2. Обновляем плейлист в плеере
         exoPlayer.clearMediaItems()
         newClips.forEach { clip ->
             val mediaItem = MediaItem.Builder()
@@ -165,7 +193,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                 ).build()
             exoPlayer.addMediaItem(mediaItem)
         }
-        exoPlayer.prepare()
+
+        exoPlayer.prepare() // Заново готовим
         exoPlayer.seekTo(0L)
         currentPos = 0L
     }
@@ -272,6 +301,23 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
             }
         }
 
+    // Лаунчер для выбора музыки
+    val musicPickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let {
+                val name =
+                    context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                        val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (idx != -1 && cursor.moveToFirst()) cursor.getString(idx) else null
+                    } ?: "music.mp3"
+
+                settings = settings.copy(audioUri = it, audioFileName = name)
+                audioPlayer.setMediaItem(MediaItem.fromUri(it))
+                audioPlayer.prepare()
+                audioPlayer.volume = settings.audioVolume
+            }
+        }
+
     // Позиция трекера
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
@@ -285,20 +331,59 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         }
     }
 
-    DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
+    LaunchedEffect(isPlaying) {
+        exoPlayer.playWhenReady = isPlaying
+        if (settings.audioUri != null) {
+            audioPlayer.playWhenReady = isPlaying
+        }
+    }
+
+    fun syncSeek(ms: Long) {
+        globalSeek(ms)
+        if (settings.audioUri != null) {
+            // Если музыка короче видео, используем остаток от деления
+            val audioDuration = audioPlayer.duration.coerceAtLeast(1)
+            audioPlayer.seekTo(ms % audioDuration)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+            audioPlayer.release()
+        }
+    }
 
     Scaffold(
-        topBar = { EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {}) },
+        topBar = {
+            EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {
+                isExporting = true
+                exoPlayer.stop()
+                exportVideo(
+                    context = context,
+                    settings = settings.copy(selectedFilter = ru.plumsoftware.focusstudio.ui.screen.editor.video.getCombinedMatrixVideo(settings)),
+                    onProgress = { exportProgress = it },
+                    onResult = { uri ->
+                        isExporting = false
+                        if (uri != null) showExportDialog = true
+                    }
+                )
+            })
+        },
         containerColor = Color.Black
     ) { padding ->
-        Column(Modifier
-            .padding(padding)
-            .fillMaxSize()) {
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
 
             // 1. ПЛЕЕР
-            Box(Modifier
-                .weight(1f)
-                .fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), contentAlignment = Alignment.Center
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize(0.9f)
@@ -380,11 +465,18 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             "Filters",
                             activeTool == VideoTools.FILTERS
                         ) { activeTool = VideoTools.FILTERS }
+                        EditorToolItem(
+                            Icons.Default.MusicNote,
+                            "Music",
+                            activeTool == VideoTools.MUSIC
+                        ) { activeTool = VideoTools.MUSIC }
                     }
 
-                    Box(Modifier
-                        .height(220.dp)
-                        .padding(horizontal = 16.dp)) {
+                    Box(
+                        Modifier
+                            .height(220.dp)
+                            .padding(horizontal = 16.dp)
+                    ) {
                         when (activeTool) {
                             VideoTools.TIMELINE -> {
                                 Column {
@@ -392,7 +484,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                     VideoTimeline(
                                         settings = settings,
                                         currentPosition = currentPos,
-                                        onSeek = { ms -> globalSeek(ms); currentPos = ms },
+                                        onSeek = { ms -> syncSeek(ms); currentPos = ms },
                                         onRangeChange = { s, e ->
                                             settings = settings.copy(startMs = s, endMs = e)
                                         },
@@ -436,10 +528,59 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                     )
                                 }
                             }
+
+                            VideoTools.MUSIC -> {
+                                MusicPanel(
+                                    settings = settings,
+                                    onAddMusic = { musicPickerLauncher.launch("audio/*") },
+                                    onVolumeChange = { vol ->
+                                        settings = settings.copy(audioVolume = vol)
+                                        audioPlayer.volume = vol
+                                    },
+                                    onRemoveMusic = {
+                                        settings =
+                                            settings.copy(audioUri = null, audioFileName = null)
+                                        audioPlayer.stop()
+                                        audioPlayer.clearMediaItems()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+
+        if (isExporting) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = iOSBlue, strokeWidth = 3.dp)
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Экспорт видео...",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+
+        if (showExportDialog) {
+            IosExportDialog(
+                onDismiss = { showExportDialog = false },
+                onGoToGallery = {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        type = "video/*"
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                }
+            )
         }
     }
 }

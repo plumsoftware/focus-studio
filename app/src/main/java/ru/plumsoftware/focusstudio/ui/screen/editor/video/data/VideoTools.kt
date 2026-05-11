@@ -4,4 +4,5 @@ object VideoTools {
     const val TIMELINE = "timeline"
     const val FILTERS = "filters"
     const val CLIPS = "clips"
+    const val MUSIC = "music"
 }

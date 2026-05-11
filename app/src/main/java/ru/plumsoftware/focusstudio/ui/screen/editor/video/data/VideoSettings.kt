@@ -1,5 +1,6 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.video.data
 
+import android.net.Uri
 import androidx.compose.ui.graphics.ColorMatrix
 
 data class VideoSettings(
@@ -11,4 +12,8 @@ data class VideoSettings(
     val selectedFilter: ColorMatrix? = null,
     val filterName: String = "None",
     val clips: List<VideoClip> = emptyList(),
+
+    val audioUri: Uri? = null,
+    val audioVolume: Float = 0.5f,
+    val audioFileName: String? = null
 )
