@@ -3,6 +3,8 @@ package ru.plumsoftware.focusstudio.ui.screen.editor.video
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -29,12 +31,18 @@ import kotlinx.coroutines.*
 import java.io.File
 import androidx.media3.effect.RgbFilter
 import android.widget.Toast
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.IntSize
+import androidx.core.graphics.withSave
 import androidx.media3.common.audio.AudioProcessor // Для корректной типизации эффектов
+import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.OverlayEffect
 import androidx.media3.transformer.ProgressHolder // Вот где прячется прогресс!
 import java.util.UUID
 import androidx.media3.transformer.*
 import kotlinx.coroutines.*
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.concat
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.createAndroidShapePath
 
 fun trimClipsLogic(clips: List<VideoClip>, globalStart: Long, globalEnd: Long): List<VideoClip> {
     val result = mutableListOf<VideoClip>()
@@ -87,40 +95,76 @@ fun formatTimeSmart(ms: Long, totalDurationMs: Long): String {
 fun exportVideo(
     context: Context,
     settings: VideoSettings,
+    displaySize: IntSize,
     onProgress: (Float) -> Unit,
     onResult: (Uri?) -> Unit
 ) {
     val outputFileName = "FocusStudio_Export_${System.currentTimeMillis()}.mp4"
     val outputFile = File(context.cacheDir, outputFileName)
 
-    // 1. ПОДГОТОВКА СПИСКА КЛИПОВ
+    // 1. Получаем параметры первого видео для определения разрешения
+    val retriever = MediaMetadataRetriever()
+    retriever.setDataSource(context, settings.clips.first().uri)
+    val videoWidth = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 1080
+    val videoHeight = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 1920
+    retriever.release()
+
+    // 2. Создаем Bitmap с фигурами для наложения
+    val scaleFactor = videoWidth.toFloat() / displaySize.width.toFloat()
+    val overlayBitmap = Bitmap.createBitmap(videoWidth, videoHeight, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(overlayBitmap)
+
+    settings.shapes.forEach { shape ->
+        canvas.withSave {
+            val posX = shape.position.x * scaleFactor
+            val posY = shape.position.y * scaleFactor
+            translate(posX, posY)
+            rotate(shape.rotation)
+
+            val w = shape.size.width * scaleFactor
+            val h = shape.size.height * scaleFactor
+            val path = createAndroidShapePath(shape.type, w, h)
+
+            if (shape.fillColor != androidx.compose.ui.graphics.Color.Transparent) {
+                drawPath(path, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = shape.fillColor.toArgb()
+                    style = android.graphics.Paint.Style.FILL
+                })
+            }
+            if (shape.strokeColor != androidx.compose.ui.graphics.Color.Transparent) {
+                drawPath(path, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = shape.strokeColor.toArgb()
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeWidth = 2f * scaleFactor
+                })
+            }
+        }
+    }
+
+    // 3. ПОДГОТОВКА КЛИПОВ С ЭФФЕКТАМИ
     val editedMediaItems = settings.clips.map { clip ->
         val mediaItem = MediaItem.Builder()
             .setUri(clip.uri)
-            .setClippingConfiguration(
-                MediaItem.ClippingConfiguration.Builder()
-                    .setStartPositionMs(clip.startMs)
-                    .setEndPositionMs(clip.endMs)
-                    .build()
-            )
+            .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                .setStartPositionMs(clip.startMs)
+                .setEndPositionMs(clip.endMs).build())
             .build()
 
-        // Собираем эффекты
-        val videoEffects = mutableListOf<androidx.media3.common.Effect>()
-        settings.selectedFilter?.let { matrix ->
-            // Используем наш новый класс вместо ColorMatrix
-            videoEffects.add(FocusVideoFilter(matrix))
+        val videoEffects = mutableListOf<Effect>()
+
+        // Фильтр цвета
+        settings.selectedFilter?.let { videoEffects.add(FocusVideoFilter(it)) }
+
+        // НАЛОЖЕНИЕ ФИГУР (OverlayEffect)
+        if (settings.shapes.isNotEmpty()) {
+            val imageOverlay = BitmapOverlay.createStaticBitmapOverlay(overlayBitmap)
+            videoEffects.add(OverlayEffect(ImmutableList.of(imageOverlay)))
         }
 
-        // Прямой конструктор Effects (публичный в 1.3.1)
-        val effects = androidx.media3.transformer.Effects(
-            ImmutableList.of(), // audio
-            ImmutableList.copyOf(videoEffects) // video
-        )
+        val effects = Effects(ImmutableList.of(), ImmutableList.copyOf(videoEffects))
 
         EditedMediaItem.Builder(mediaItem)
             .setEffects(effects)
-            .setRemoveAudio(false)
             .build()
     }
 

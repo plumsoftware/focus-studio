@@ -2,6 +2,7 @@ package ru.plumsoftware.focusstudio.ui.screen.editor.video.data
 
 import android.net.Uri
 import androidx.compose.ui.graphics.ColorMatrix
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.ShapeElement
 
 data class VideoSettings(
     val startMs: Long = 0L,
@@ -15,5 +16,8 @@ data class VideoSettings(
 
     val audioUri: Uri? = null,
     val audioVolume: Float = 0.5f,
-    val audioFileName: String? = null
+    val audioFileName: String? = null,
+
+    // ДОБАВЛЕНО:
+    val shapes: List<ShapeElement> = emptyList()
 )

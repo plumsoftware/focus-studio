@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
@@ -71,9 +72,11 @@ import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -92,6 +95,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorTopBar
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeComponent
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
@@ -114,6 +118,14 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var showExportDialog by remember { mutableStateOf(false) }
 
+    var selectedShapeId by remember { mutableStateOf<String?>(null) }
+    var playerViewSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // Функция обновления настроек (аналогично фото)
+    fun updateSettings(newSettings: VideoSettings) {
+        settings = newSettings
+    }
+
     val exoPlayer = remember {
         // 1. Создаем фабрику рендереров с поддержкой программного декодинга
         val renderersFactory = DefaultRenderersFactory(context)
@@ -126,7 +138,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
 
             addListener(object : Player.Listener {
                 override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    if (videoSize.width > 0) videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
+                    if (videoSize.width > 0) videoAspectRatio =
+                        videoSize.width.toFloat() / videoSize.height.toFloat()
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
@@ -361,7 +374,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                 exoPlayer.stop()
                 exportVideo(
                     context = context,
-                    settings = settings.copy(selectedFilter = ru.plumsoftware.focusstudio.ui.screen.editor.video.getCombinedMatrixVideo(settings)),
+                    displaySize = playerViewSize,
+                    settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
                     onProgress = { exportProgress = it },
                     onResult = { uri ->
                         isExporting = false
@@ -388,6 +402,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     modifier = Modifier
                         .fillMaxSize(0.9f)
                         .aspectRatio(videoAspectRatio, matchHeightConstraintsFirst = true)
+                        .onGloballyPositioned { playerViewSize = it.size }
                         .clip(RoundedCornerShape(12.dp))
                         .graphicsLayer {
                             // ПРИМЕНЕНИЕ ФИЛЬТРА (API 31+)
@@ -420,6 +435,24 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                 colorFilter = ColorFilter.colorMatrix(settings.selectedFilter!!)
                             )
                         }
+                    }
+
+                    // --- ОТРИСОВКА ФИГУР ---
+                    settings.shapes.forEach { shape ->
+                        ShapeComponent(
+                            shape = shape,
+                            isSelected = selectedShapeId == shape.id,
+                            onCommitTransform = { updatedShape ->
+                                updateSettings(
+                                    settings.copy(
+                                    shapes = settings.shapes.map { if (it.id == shape.id) updatedShape else it }
+                                ))
+                            },
+                            onClick = {
+                                selectedShapeId = shape.id
+                                activeTool = VideoTools.SHAPES
+                            }
+                        )
                     }
                 }
 
@@ -470,6 +503,11 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             "Music",
                             activeTool == VideoTools.MUSIC
                         ) { activeTool = VideoTools.MUSIC }
+                        EditorToolItem(
+                            Icons.Default.Category,
+                            "Shapes",
+                            activeTool == VideoTools.SHAPES
+                        ) { activeTool = VideoTools.SHAPES }
                     }
 
                     Box(
@@ -527,6 +565,17 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                         }
                                     )
                                 }
+                            }
+
+                            VideoTools.SHAPES -> {
+                                VideoShapeControlPanel(
+                                    settings = settings,
+                                    selectedShapeId = selectedShapeId,
+                                    onUpdate = { updateSettings(it) },
+                                    onClose = {
+                                        selectedShapeId = null; activeTool = VideoTools.TIMELINE
+                                    }
+                                )
                             }
 
                             VideoTools.MUSIC -> {
