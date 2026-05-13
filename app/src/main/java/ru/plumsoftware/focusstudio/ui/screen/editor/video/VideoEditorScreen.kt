@@ -79,6 +79,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -126,6 +127,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var showExportDialog by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
 
     // ID выбранных объектов
     var selectedTextId by remember { mutableStateOf<String?>(null) }
@@ -370,6 +372,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     context = context,
                     displaySize = playerViewSize,
                     settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
+                    density = density.density,
                     onResult = { uri ->
                         isExporting = false
                         if (uri != null) {

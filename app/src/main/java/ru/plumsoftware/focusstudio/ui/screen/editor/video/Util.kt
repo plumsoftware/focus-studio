@@ -97,6 +97,7 @@ fun formatTimeSmart(ms: Long, totalDurationMs: Long): String {
 fun exportVideo(
     context: Context,
     settings: VideoSettings,
+    density: Float,
     displaySize: androidx.compose.ui.unit.IntSize,
     onResult: (Uri?) -> Unit
 ) {
@@ -113,9 +114,15 @@ fun exportVideo(
     val vH: Int
     try {
         retriever.setDataSource(context, settings.clips.first().uri)
-        val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toInt() ?: 0
-        val rawW = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 1080
-        val rawH = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: 1920
+        val rotation =
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toInt()
+                ?: 0
+        val rawW =
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt()
+                ?: 1080
+        val rawH =
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt()
+                ?: 1920
 
         // ВАЖНО: Если видео повернуто на 90/270 градусов, меняем ширину и высоту местами
         if (rotation == 90 || rotation == 270) {
@@ -134,16 +141,17 @@ fun exportVideo(
 
     // 2. Создаем Bitmap оверлей под РЕАЛЬНЫЙ размер видео
     val overlayBitmap = Bitmap.createBitmap(vW, vH, Bitmap.Config.ARGB_8888)
-    overlayBitmap.eraseColor(android.graphics.Color.TRANSPARENT) // Гарантируем прозрачность
-
-    val scale = vW.toFloat() / displaySize.width.toFloat()
     val canvas = android.graphics.Canvas(overlayBitmap)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    overlayBitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+
+    val scale = vW.toFloat() / displaySize.width.toFloat()
 
     // РИСУЕМ ФИГУРЫ
     settings.shapes.forEach { shape ->
-        val scaledWidth = shape.size.width * scale
-        val scaledHeight = shape.size.height * scale
+        // Если в редакторе вы используете dp, здесь нужно умножить на density
+        val scaledWidth = shape.size.width * density * scale
+        val scaledHeight = shape.size.height * density * scale
         val posX = shape.position.x * scale
         val posY = shape.position.y * scale
 
@@ -161,7 +169,7 @@ fun exportVideo(
         if (shape.strokeColor != androidx.compose.ui.graphics.Color.Transparent) {
             paint.style = android.graphics.Paint.Style.STROKE
             paint.color = shape.strokeColor.toArgb()
-            paint.strokeWidth = 4f * scale
+            paint.strokeWidth = 2f * density * scale // Обводка тоже должна масштабироваться
             canvas.drawPath(path, paint)
         }
         canvas.restore()
@@ -171,21 +179,26 @@ fun exportVideo(
     settings.texts.forEach { text ->
         val textPaint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = text.color.toArgb()
-            textSize = text.fontSize * scale
-            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            // fontSize (в SP) * density * scale = размер в пикселях видео
+            textSize = text.fontSize * density * scale
+            typeface = android.graphics.Typeface.create(
+                android.graphics.Typeface.DEFAULT,
+                android.graphics.Typeface.BOLD
+            )
         }
 
         val tx = text.position.x * scale
         val ty = text.position.y * scale
 
         canvas.save()
+        // Небольшая коррекция ty: Compose рисует текст чуть ниже,
+        // чем StaticLayout из-за внутренних отступов шрифта.
         canvas.translate(tx, ty)
 
-        // Даем тексту всю доступную ширину видео, чтобы он не обрезался раньше времени
         val maxWidth = (vW - tx).toInt().coerceAtLeast(1)
         val staticLayout = android.text.StaticLayout.Builder
             .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
-            .setIncludePad(false)
+            .setIncludePad(false) // Убираем лишние отступы для точности
             .build()
 
         staticLayout.draw(canvas)
@@ -200,25 +213,36 @@ fun exportVideo(
 
     // Затем оверлей
     if (settings.shapes.isNotEmpty() || settings.texts.isNotEmpty()) {
-        val bitmapOverlay = androidx.media3.effect.BitmapOverlay.createStaticBitmapOverlay(overlayBitmap)
-        videoEffects.add(androidx.media3.effect.OverlayEffect(com.google.common.collect.ImmutableList.of(bitmapOverlay)))
+        val bitmapOverlay =
+            androidx.media3.effect.BitmapOverlay.createStaticBitmapOverlay(overlayBitmap)
+        videoEffects.add(
+            androidx.media3.effect.OverlayEffect(
+                com.google.common.collect.ImmutableList.of(
+                    bitmapOverlay
+                )
+            )
+        )
     }
 
     // 4. СБОРКА КЛИПОВ
     val editedItems = settings.clips.map { clip ->
         val mediaItem = MediaItem.Builder()
             .setUri(clip.uri)
-            .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
-                .setStartPositionMs(clip.startMs)
-                .setEndPositionMs(clip.endMs)
-                .build())
+            .setClippingConfiguration(
+                MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(clip.startMs)
+                    .setEndPositionMs(clip.endMs)
+                    .build()
+            )
             .build()
 
         EditedMediaItem.Builder(mediaItem)
-            .setEffects(androidx.media3.transformer.Effects(
-                com.google.common.collect.ImmutableList.of(),
-                com.google.common.collect.ImmutableList.copyOf(videoEffects)
-            ))
+            .setEffects(
+                androidx.media3.transformer.Effects(
+                    com.google.common.collect.ImmutableList.of(),
+                    com.google.common.collect.ImmutableList.copyOf(videoEffects)
+                )
+            )
             .build()
     }
 
@@ -232,8 +256,15 @@ fun exportVideo(
 
     transformer.addListener(object : Transformer.Listener {
         override fun onCompleted(c: Composition, r: ExportResult) {
-            onResult(saveVideoToGallery(context, outputFile, "Focus_Export_${System.currentTimeMillis()}.mp4"))
+            onResult(
+                saveVideoToGallery(
+                    context,
+                    outputFile,
+                    "Focus_Export_${System.currentTimeMillis()}.mp4"
+                )
+            )
         }
+
         override fun onError(c: Composition, r: ExportResult, e: ExportException) {
             e.printStackTrace()
             onResult(null)
@@ -281,19 +312,22 @@ fun getCombinedMatrixVideo(settings: VideoSettings): ColorMatrix {
     val contrastScale = 1f // + (settings.contrast / 200f)
     val b = 0f // settings.brightness
 
-    val contrastMatrix = ColorMatrix(floatArrayOf(
-        contrastScale, 0f, 0f, 0f, b,
-        0f, contrastScale, 0f, 0f, b,
-        0f, 0f, contrastScale, 0f, b,
-        0f, 0f, 0f, 1f, 0f
-    ))
+    val contrastMatrix = ColorMatrix(
+        floatArrayOf(
+            contrastScale, 0f, 0f, 0f, b,
+            0f, contrastScale, 0f, 0f, b,
+            0f, 0f, contrastScale, 0f, b,
+            0f, 0f, 0f, 1f, 0f
+        )
+    )
     result.concat(contrastMatrix)
 
     return result
 }
 
 @androidx.media3.common.util.UnstableApi
-class FocusVideoFilter(private val composeMatrix: androidx.compose.ui.graphics.ColorMatrix) : androidx.media3.effect.RgbMatrix {
+class FocusVideoFilter(private val composeMatrix: androidx.compose.ui.graphics.ColorMatrix) :
+    androidx.media3.effect.RgbMatrix {
     override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean): FloatArray {
         val v = composeMatrix.values
 
@@ -303,10 +337,10 @@ class FocusVideoFilter(private val composeMatrix: androidx.compose.ui.graphics.C
         // Но цветовые фильтры (Нуар, Винтаж и т.д.) теперь будут работать идеально.
 
         return floatArrayOf(
-            v[0],  v[5],  v[10], v[15], // Колонка 1 (были начала строк)
-            v[1],  v[6],  v[11], v[16], // Колонка 2
-            v[2],  v[7],  v[12], v[17], // Колонка 3
-            v[3],  v[8],  v[13], v[18]  // Колонка 4
+            v[0], v[5], v[10], v[15], // Колонка 1 (были начала строк)
+            v[1], v[6], v[11], v[16], // Колонка 2
+            v[2], v[7], v[12], v[17], // Колонка 3
+            v[3], v[8], v[13], v[18]  // Колонка 4
         )
     }
 }
