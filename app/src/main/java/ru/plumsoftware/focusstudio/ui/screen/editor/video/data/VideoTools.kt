@@ -6,4 +6,5 @@ object VideoTools {
     const val CLIPS = "clips"
     const val MUSIC = "music"
     const val SHAPES = "shapes"
+    const val TEXT = "text"
 }

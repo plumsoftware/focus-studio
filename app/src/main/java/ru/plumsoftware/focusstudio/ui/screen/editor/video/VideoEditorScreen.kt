@@ -17,6 +17,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,6 +66,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,11 +75,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,6 +102,8 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorTopBar
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeComponent
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.text.TextControlPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.PhotoSettingsAdapter
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
@@ -103,6 +111,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoTools
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
+import kotlin.math.roundToInt
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -118,8 +127,10 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var showExportDialog by remember { mutableStateOf(false) }
 
+    // ID выбранных объектов
+    var selectedTextId by remember { mutableStateOf<String?>(null) }
+    var playerViewSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
-    var playerViewSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Функция обновления настроек (аналогично фото)
     fun updateSettings(newSettings: VideoSettings) {
@@ -127,40 +138,21 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     }
 
     val exoPlayer = remember {
-        // 1. Создаем фабрику рендереров с поддержкой программного декодинга
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-            .setEnableDecoderFallback(true) // ОЧЕНЬ ВАЖНО: разрешает переход на софт, если хард упал
-
-        ExoPlayer.Builder(context, renderersFactory).build().apply {
-            // Устанавливаем параметры поиска кадра
+        val rf = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context, rf).build().apply {
             setSeekParameters(SeekParameters.CLOSEST_SYNC)
-
             addListener(object : Player.Listener {
-                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    if (videoSize.width > 0) videoAspectRatio =
-                        videoSize.width.toFloat() / videoSize.height.toFloat()
+                override fun onVideoSizeChanged(size: VideoSize) {
+                    if (size.width > 0) videoAspectRatio =
+                        size.width.toFloat() / size.height.toFloat()
                 }
 
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) {
-                        isPlaying = false
-                        playWhenReady = false
-                        seekTo(0, 0)
-                        currentPos = 0L
-                    }
-                }
-
-                // ЛОВИМ ОШИБКИ ДЕКОДЕРА
-                override fun onPlayerError(error: PlaybackException) {
-                    if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED) {
-                        // Если декодер сдох, пробуем переподготовить плеер
-                        prepare()
-                        play()
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_ENDED) {
+                        isPlaying = false; seekTo(0, 0); currentPos = 0L
                     }
                 }
             })
-            prepare()
         }
     }
 
@@ -371,15 +363,21 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         topBar = {
             EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {
                 isExporting = true
-                exoPlayer.stop()
+                isPlaying = false
+                exoPlayer.pause()
+
                 exportVideo(
                     context = context,
                     displaySize = playerViewSize,
                     settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
-                    onProgress = { exportProgress = it },
                     onResult = { uri ->
                         isExporting = false
-                        if (uri != null) showExportDialog = true
+                        if (uri != null) {
+                            showExportDialog = true
+                        }
+
+                        refreshPlaylist()
+                        exoPlayer.playWhenReady = false
                     }
                 )
             })
@@ -445,13 +443,45 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             onCommitTransform = { updatedShape ->
                                 updateSettings(
                                     settings.copy(
-                                    shapes = settings.shapes.map { if (it.id == shape.id) updatedShape else it }
-                                ))
+                                        shapes = settings.shapes.map { if (it.id == shape.id) updatedShape else it }
+                                    ))
                             },
                             onClick = {
                                 selectedShapeId = shape.id
                                 activeTool = VideoTools.SHAPES
                             }
+                        )
+                    }
+
+                    settings.texts.forEach { textItem ->
+                        val textState by rememberUpdatedState(textItem)
+                        var localOffset by remember(textItem.id) { mutableStateOf(textItem.position) }
+                        LaunchedEffect(textItem.position) { localOffset = textItem.position }
+
+                        Text(
+                            text = textItem.text,
+                            color = textItem.color,
+                            fontSize = textItem.fontSize.sp,
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        localOffset.x.roundToInt(),
+                                        localOffset.y.roundToInt()
+                                    )
+                                }
+                                .pointerInput(textItem.id) {
+                                    detectDragGestures(
+                                        onDrag = { change, drag -> change.consume(); localOffset += drag },
+                                        onDragEnd = {
+                                            settings = settings.copy(texts = settings.texts.map {
+                                                if (it.id == textItem.id) textState.copy(position = localOffset) else it
+                                            })
+                                        }
+                                    )
+                                }
+                                .clickable {
+                                    selectedTextId = textItem.id; activeTool = VideoTools.TEXT
+                                }
                         )
                     }
                 }
@@ -477,37 +507,54 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
             ) {
                 Column {
-                    Row(
+                    LazyRow(
                         Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        EditorToolItem(
-                            Icons.Default.History,
-                            "Timeline",
-                            activeTool == VideoTools.TIMELINE
-                        ) { activeTool = VideoTools.TIMELINE }
-                        EditorToolItem(
-                            Icons.Default.VideoLibrary,
-                            "Clips",
-                            activeTool == VideoTools.CLIPS
-                        ) { activeTool = VideoTools.CLIPS }
-                        EditorToolItem(
-                            Icons.Default.AutoAwesome,
-                            "Filters",
-                            activeTool == VideoTools.FILTERS
-                        ) { activeTool = VideoTools.FILTERS }
-                        EditorToolItem(
-                            Icons.Default.MusicNote,
-                            "Music",
-                            activeTool == VideoTools.MUSIC
-                        ) { activeTool = VideoTools.MUSIC }
-                        EditorToolItem(
-                            Icons.Default.Category,
-                            "Shapes",
-                            activeTool == VideoTools.SHAPES
-                        ) { activeTool = VideoTools.SHAPES }
+                        item {
+                            EditorToolItem(
+                                Icons.Default.History,
+                                "Timeline",
+                                activeTool == VideoTools.TIMELINE
+                            ) { activeTool = VideoTools.TIMELINE }
+                        }
+                        item {
+                            EditorToolItem(
+                                Icons.Default.VideoLibrary,
+                                "Clips",
+                                activeTool == VideoTools.CLIPS
+                            ) { activeTool = VideoTools.CLIPS }
+                        }
+                        item {
+                            EditorToolItem(
+                                Icons.Default.AutoAwesome,
+                                "Filters",
+                                activeTool == VideoTools.FILTERS
+                            ) { activeTool = VideoTools.FILTERS }
+                        }
+                        item {
+                            EditorToolItem(
+                                Icons.Default.MusicNote,
+                                "Music",
+                                activeTool == VideoTools.MUSIC
+                            ) { activeTool = VideoTools.MUSIC }
+                        }
+                        item {
+                            EditorToolItem(
+                                Icons.Default.TextFields,
+                                "Text",
+                                activeTool == VideoTools.TEXT
+                            ) { activeTool = VideoTools.TEXT }
+                        }
+                        item {
+                            EditorToolItem(
+                                Icons.Default.Category,
+                                "Shapes",
+                                activeTool == VideoTools.SHAPES
+                            ) { activeTool = VideoTools.SHAPES }
+                        }
                     }
 
                     Box(
@@ -591,6 +638,19 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                             settings.copy(audioUri = null, audioFileName = null)
                                         audioPlayer.stop()
                                         audioPlayer.clearMediaItems()
+                                    }
+                                )
+                            }
+
+                            VideoTools.TEXT -> {
+                                TextControlPanel(
+                                    settings = PhotoSettingsAdapter.toPhoto(settings),
+                                    selectedTextId = selectedTextId,
+                                    onUpdate = {
+                                        settings = PhotoSettingsAdapter.toVideo(it, settings)
+                                    },
+                                    onClose = {
+                                        selectedTextId = null; activeTool = VideoTools.TIMELINE
                                     }
                                 )
                             }
