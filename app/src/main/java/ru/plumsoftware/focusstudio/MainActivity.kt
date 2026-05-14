@@ -1,15 +1,17 @@
 package ru.plumsoftware.focusstudio
 
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -19,21 +21,78 @@ import ru.plumsoftware.focusstudio.ui.screen.WelcomeScreen
 import ru.plumsoftware.focusstudio.ui.theme.FocusTheme
 import ru.plumsoftware.focusstudio.ui.theme.Routes
 import androidx.core.net.toUri
+import com.yandex.mobile.ads.appopenad.AppOpenAd
+import com.yandex.mobile.ads.appopenad.AppOpenAdEventListener
+import com.yandex.mobile.ads.appopenad.AppOpenAdLoadListener
+import com.yandex.mobile.ads.appopenad.AppOpenAdLoader
+import com.yandex.mobile.ads.common.AdError
+import com.yandex.mobile.ads.common.AdRequest
+import com.yandex.mobile.ads.common.AdRequestError
+import com.yandex.mobile.ads.common.ImpressionData
+import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.VideoEditorScreen
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(
+                Color.BLACK
+            ),
+            navigationBarStyle = SystemBarStyle.dark(
+                Color.BLACK
+            )
+        )
         setContent {
-            FocusTheme {
+
+            var isAdsLoading by remember { mutableStateOf(false) }
+
+            FocusTheme(darkTheme = false) {
                 val navController = rememberNavController()
+
+                LaunchedEffect(key1 = Unit) {
+                    isAdsLoading = true
+                    val appOpenAdLoader = AppOpenAdLoader(application)
+                    val adRequest = AdRequest.Builder(AdsConfig.OPEN_ADS_ID).build()
+
+                    val appOpenAdLoadListener = object : AppOpenAdLoadListener {
+                        override fun onAdLoaded(appOpenAd: AppOpenAd) {
+                            isAdsLoading = false
+                            appOpenAd.setAdEventListener(object : AppOpenAdEventListener {
+                                override fun onAdClicked() {}
+
+                                override fun onAdDismissed() {}
+
+                                override fun onAdFailedToShow(adError: AdError) {}
+
+                                override fun onAdImpression(impressionData: ImpressionData?) {}
+
+                                override fun onAdShown() {}
+                            })
+                            appOpenAd.show(this@MainActivity)
+                        }
+
+                        override fun onAdFailedToLoad(error: AdRequestError) {
+                            isAdsLoading = false
+                        }
+                    }
+
+                    appOpenAdLoader.loadAd(adRequest, appOpenAdLoadListener)
+
+                }
+
                 NavHost(
                     navController = navController,
                     startDestination = Routes.WELCOME
                 ) {
-                    composable(Routes.WELCOME) { WelcomeScreen(navController) }
+                    composable(Routes.WELCOME) {
+                        WelcomeScreen(
+                            navController = navController,
+                            isAdsLoading = isAdsLoading
+                        )
+                    }
 
                     composable(
                         route = "${Routes.PHOTO_EDITOR}/{photoUri}",

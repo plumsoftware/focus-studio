@@ -22,13 +22,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,8 +47,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -80,37 +76,37 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
-import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
-import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorTopBar
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeComponent
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeControlPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.text.TextControlPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.clips.ClipsPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.PhotoSettingsAdapter
-import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoTools
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.filter.VideoFilterRow
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.music.MusicPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.shape.VideoShapeControlPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.shape.VideoTimeline
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.timeline.TrimButton
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
-import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 import kotlin.math.roundToInt
 
@@ -618,14 +614,29 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             }
 
                             VideoTools.SHAPES -> {
-                                VideoShapeControlPanel(
-                                    settings = settings,
+                                ShapeControlPanel(
+                                    settings = PhotoSettingsAdapter.toPhoto(video = settings),
                                     selectedShapeId = selectedShapeId,
-                                    onUpdate = { updateSettings(it) },
+                                    onUpdate = {
+                                        updateSettings(
+                                            PhotoSettingsAdapter.toVideo(
+                                                it,
+                                                settings
+                                            )
+                                        )
+                                    },
                                     onClose = {
                                         selectedShapeId = null; activeTool = VideoTools.TIMELINE
                                     }
                                 )
+//                                VideoShapeControlPanel(
+//                                    settings = settings,
+//                                    selectedShapeId = selectedShapeId,
+//                                    onUpdate = { updateSettings(it) },
+//                                    onClose = {
+//                                        selectedShapeId = null; activeTool = VideoTools.TIMELINE
+//                                    }
+//                                )
                             }
 
                             VideoTools.MUSIC -> {
@@ -693,128 +704,6 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     context.startActivity(intent)
                 }
             )
-        }
-    }
-}
-
-@Composable
-fun VideoFilterRow(
-    previewBitmap: Bitmap?,
-    currentFilterName: String,
-    onFilterSelected: (ColorMatrix?, String) -> Unit
-) {
-    val filters = listOf(
-        Triple("Нет", null, "None"),
-        Triple("Нуар", FilterMatrices.Noir, "Noir"),
-        Triple("Винтаж", FilterMatrices.Vintage, "Vintage"),
-        Triple("Кино", FilterMatrices.Cinema, "Cinema")
-    )
-
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        items(filters) { (label, matrix, name) ->
-            val isSelected = currentFilterName == name
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                // ИСПРАВЛЕНО: Теперь нажимается ВСЁ, включая "Нет" (null)
-                modifier = Modifier.clickable { onFilterSelected(matrix, name) }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.DarkGray)
-                        .border(
-                            width = if (isSelected) 3.dp else 1.dp,
-                            color = if (isSelected) iOSBlue else Color.White.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (previewBitmap != null) {
-                        Image(
-                            bitmap = previewBitmap.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            // Применяем фильтр к превью
-                            colorFilter = matrix?.let { ColorFilter.colorMatrix(it) }
-                        )
-                    } else {
-                        Icon(Icons.Default.Movie, null, tint = Color.White.copy(0.2f))
-                    }
-                }
-                Text(
-                    text = label,
-                    color = if (isSelected) iOSBlue else Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(top = 4.dp),
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ClipsPanel(
-    settings: VideoSettings,
-    onAddClick: () -> Unit,
-    onRemoveClip: (Int) -> Unit
-) {
-    Column {
-        SectionTitle("Клипы проекта")
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            itemsIndexed(settings.clips) { index, clip ->
-                Box(
-                    modifier = Modifier
-                        .size(110.dp, 70.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(DarkSurface)
-                        .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(12.dp))
-                ) {
-                    Text(
-                        "Клип ${index + 1}",
-                        Modifier.align(Alignment.Center),
-                        color = Color.White,
-                        fontSize = 12.sp
-                    )
-                    // Кнопка удаления (Маленький красный крестик в углу)
-                    if (index != 0)
-                        Icon(
-                            Icons.Default.Cancel,
-                            null,
-                            tint = Color.Red.copy(0.7f),
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .size(18.dp)
-                                .clickable { onRemoveClip(index) }
-                        )
-                }
-            }
-
-            item {
-                Surface(
-                    onClick = onAddClick,
-                    modifier = Modifier.size(70.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(0.05f)
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        null,
-                        tint = iOSBlue,
-                        modifier = Modifier.padding(20.dp)
-                    )
-                }
-            }
         }
     }
 }

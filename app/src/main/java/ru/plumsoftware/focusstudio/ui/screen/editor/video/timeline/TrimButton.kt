@@ -1,4 +1,4 @@
-package ru.plumsoftware.focusstudio.ui.screen.editor.video
+package ru.plumsoftware.focusstudio.ui.screen.editor.video.timeline
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height

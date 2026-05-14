@@ -1,4 +1,4 @@
-package ru.plumsoftware.focusstudio.ui.screen.editor.video
+package ru.plumsoftware.focusstudio.ui.screen.editor.video.music
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

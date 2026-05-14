@@ -19,6 +19,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        buildConfigField("int", "PLATFORM", "1")
+
         renderscriptTargetApi = 23
         renderscriptSupportModeEnabled = true
     }
@@ -41,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -79,4 +82,7 @@ dependencies {
 
     // Compose UI
     implementation(libs.androidx.ui.graphics)
+
+    //Yandex Ads
+    implementation("com.yandex.android:mobileads:8.0.0")
 }

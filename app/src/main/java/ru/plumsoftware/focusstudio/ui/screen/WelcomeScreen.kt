@@ -3,6 +3,10 @@ package ru.plumsoftware.focusstudio.ui.screen
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,11 +23,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,7 +59,7 @@ import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 import ru.plumsoftware.focusstudio.ui.theme.iOSPurple
 
 @Composable
-fun WelcomeScreen(navController: NavController) {
+fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -73,88 +79,111 @@ fun WelcomeScreen(navController: NavController) {
         }
     }
 
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            // Заменяем системный фон на жесткий черный в стиле iOS
-            .background(Color.Black)
-            .statusBarsPadding()
-            .padding(FocusDesign.paddingLarge)
-            .navigationBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Переключатель языков
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                // Заменяем системный фон на жесткий черный в стиле iOS
+                .background(Color.Black)
+                .statusBarsPadding()
+                .padding(FocusDesign.paddingLarge)
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            LanguageToggle()
-        }
 
-        Spacer(modifier = Modifier.height(FocusDesign.mainSpacing))
+            Spacer(modifier = Modifier.height(FocusDesign.mainSpacing))
 
-        // Badge "Профессиональная студия"
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            color = Color.Transparent,
-            border = BorderStroke(FocusDesign.badgeStrokeWidth, iOSBlue),
-            modifier = Modifier.padding(bottom = FocusDesign.paddingMedium)
-        ) {
+            // Badge "Профессиональная студия"
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = Color.Transparent,
+                border = BorderStroke(FocusDesign.badgeStrokeWidth, iOSBlue),
+                modifier = Modifier.padding(bottom = FocusDesign.paddingMedium)
+            ) {
+                Text(
+                    text = stringResource(R.string.prof_studio).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = iOSBlue,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+
+            // Заголовок
             Text(
-                text = stringResource(R.string.prof_studio).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = iOSBlue,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.displayMedium,
+                color = Color.White
             )
+
+            Text(
+                text = stringResource(R.string.subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = AppleGray,
+                modifier = Modifier.padding(top = FocusDesign.paddingSmall)
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Карточки выбора
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingMedium)
+            ) {
+                SelectionCard(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(R.string.video_title),
+                    desc = stringResource(R.string.video_desc),
+                    icon = Icons.Default.Videocam,
+                    iconColor = iOSBlue,
+                    onClick = { videoPickerLauncher.launch("video/*") }
+                )
+                SelectionCard(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(R.string.photo_title),
+                    desc = stringResource(R.string.photo_desc),
+                    icon = Icons.Default.Image,
+                    iconColor = iOSPurple,
+                    onClick = {
+                        photoPickerLauncher.launch("image/*")
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Нижние бейджи (4K RAW и т.д.)
+            TechInfoRow()
         }
 
-        // Заголовок
-        Text(
-            text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.displayMedium,
-            color = Color.White
-        )
-
-        Text(
-            text = stringResource(R.string.subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = AppleGray,
-            modifier = Modifier.padding(top = FocusDesign.paddingSmall)
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Карточки выбора
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingMedium)
+        AnimatedVisibility(
+            visible = isAdsLoading,
+            enter = fadeIn(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300))
         ) {
-            SelectionCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.video_title),
-                desc = stringResource(R.string.video_desc),
-                icon = Icons.Default.Videocam,
-                iconColor = iOSBlue,
-                onClick = { videoPickerLauncher.launch("video/*") }
-            )
-            SelectionCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.photo_title),
-                desc = stringResource(R.string.photo_desc),
-                icon = Icons.Default.Image,
-                iconColor = iOSPurple,
-                onClick = {
-                    photoPickerLauncher.launch("image/*")
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .wrapContentSize()
+                        .align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(
+                        space = 8.dp,
+                        alignment = Alignment.CenterVertically
+                    )
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                    Text(
+                        text = "Загрузка рекламы",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
-            )
+            }
         }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Нижние бейджи (4K RAW и т.д.)
-        TechInfoRow()
     }
 }
 
