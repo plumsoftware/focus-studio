@@ -11,4 +11,5 @@ object AdsConfig {
      */
 
     val OPEN_ADS_ID = if (BuildConfig.DEBUG) "demo-appopenad-yandex" else if (BuildConfig.PLATFORM == 1) "R-M-19268030-1" else if (BuildConfig.PLATFORM == 3) "R-M-19275668-1" else "demo-appopenad-yandex"
+    val INTERSTITIAL_ADS_ID = if (BuildConfig.DEBUG) "demo-interstitial-yandex" else if (BuildConfig.PLATFORM == 1) "R-M-19268030-2" else if (BuildConfig.PLATFORM == 3) "R-M-19275668-2" else "demo-interstitial-yandex"
 }

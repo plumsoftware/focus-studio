@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
 import android.view.TextureView
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -87,7 +88,15 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import com.yandex.mobile.ads.common.AdRequest
+import com.yandex.mobile.ads.common.AdRequestError
+import com.yandex.mobile.ads.common.ImpressionData
+import com.yandex.mobile.ads.interstitial.InterstitialAd
+import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener
+import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
+import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
 import kotlinx.coroutines.delay
+import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
@@ -114,6 +123,7 @@ import kotlin.math.roundToInt
 @Composable
 fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
     var videoAspectRatio by remember { mutableFloatStateOf(1f) }
     var settings by remember { mutableStateOf(VideoSettings()) }
     var currentPos by remember { mutableLongStateOf(0L) }
@@ -129,6 +139,44 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var selectedTextId by remember { mutableStateOf<String?>(null) }
     var playerViewSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
+
+    // --- СОСТОЯНИЕ РЕКЛАМЫ ---
+    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+    val adLoader = remember { InterstitialAdLoader(context) }
+
+    // Загрузка рекламы при входе на экран
+    LaunchedEffect(Unit) {
+        val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
+        adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
+            override fun onAdLoaded(ad: InterstitialAd) {
+                interstitialAd = ad
+            }
+
+            override fun onAdFailedToLoad(error: AdRequestError) {
+                interstitialAd = null
+            }
+        })
+    }
+
+    val showAdAndDialog = {
+        showExportDialog = true
+        if (interstitialAd != null && activity != null) {
+            interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
+                override fun onAdShown() {}
+                override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) {
+                    // Если реклама не смогла показаться, пользователь просто увидит диалог
+                }
+
+                override fun onAdDismissed() {
+                    // Реклама закрыта, под ней уже висит наш диалог
+                }
+
+                override fun onAdClicked() {}
+                override fun onAdImpression(impressionData: ImpressionData?) {}
+            })
+            interstitialAd?.show(activity)
+        }
+    }
 
     // Функция обновления настроек (аналогично фото)
     fun updateSettings(newSettings: VideoSettings) {
@@ -373,6 +421,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                         isExporting = false
                         if (uri != null) {
                             showExportDialog = true
+                            showAdAndDialog()
                         }
 
                         refreshPlaylist()

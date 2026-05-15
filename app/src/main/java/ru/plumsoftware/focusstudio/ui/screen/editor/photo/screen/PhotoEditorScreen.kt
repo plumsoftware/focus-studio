@@ -6,6 +6,7 @@ import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -63,6 +64,14 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.yandex.mobile.ads.common.AdRequest
+import com.yandex.mobile.ads.common.AdRequestError
+import com.yandex.mobile.ads.common.ImpressionData
+import com.yandex.mobile.ads.interstitial.InterstitialAd
+import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener
+import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
+import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
+import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.adjust.AdjustPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.AdvancedCropOverlay
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.EditorTools
@@ -82,6 +91,7 @@ import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 @Composable
 fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
     val history = remember { mutableStateListOf(PhotoSettings()) }
     var currentIndex by remember { mutableIntStateOf(0) }
     val currentSettings = history[currentIndex]
@@ -92,6 +102,44 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var showExportDialog by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // --- СОСТОЯНИЕ РЕКЛАМЫ ---
+    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+    val adLoader = remember { InterstitialAdLoader(context) }
+
+    // Загрузка рекламы при входе на экран
+    LaunchedEffect(Unit) {
+        val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
+        adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
+            override fun onAdLoaded(ad: InterstitialAd) {
+                interstitialAd = ad
+            }
+
+            override fun onAdFailedToLoad(error: AdRequestError) {
+                interstitialAd = null
+            }
+        })
+    }
+
+    val showAdAndDialog = {
+        showExportDialog = true
+        if (interstitialAd != null && activity != null) {
+            interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
+                override fun onAdShown() {}
+                override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) {
+                    // Если реклама не смогла показаться, пользователь просто увидит диалог
+                }
+
+                override fun onAdDismissed() {
+                    // Реклама закрыта, под ней уже висит наш диалог
+                }
+
+                override fun onAdClicked() {}
+                override fun onAdImpression(impressionData: ImpressionData?) {}
+            })
+            interstitialAd?.show(activity)
+        }
+    }
 
     // Логика истории
     fun updateSettings(newSettings: PhotoSettings) {
@@ -130,13 +178,17 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
                         showExportDialog = true
                         isExporting = false
+                        if (uri != null)
+                            showAdAndDialog()
                     }
                 }
             })
         },
         containerColor = Color.Black
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Column(modifier = Modifier
+            .padding(padding)
+            .fillMaxSize()) {
 
             // 1. ОБЛАСТЬ ИЗОБРАЖЕНИЯ
             Box(
@@ -351,9 +403,11 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             activeTool == EditorTools.SHAPES
                         ) { activeTool = EditorTools.SHAPES }
                     }
-                    Box(modifier = Modifier
-                        .height(240.dp)
-                        .padding(horizontal = 16.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .height(240.dp)
+                            .padding(horizontal = 16.dp)
+                    ) {
                         when (activeTool) {
                             EditorTools.ADJUST -> AdjustPanel(currentSettings) { updateSettings(it) }
                             EditorTools.FILTERS -> FilterRow(photoUri) { m, n ->
@@ -397,7 +451,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         }
 
         if (isExporting) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = iOSBlue)
             }
         }
