@@ -23,16 +23,16 @@ import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 fun FocusSlider(
     label: String,
     value: Float,
+    valueRange: ClosedFloatingPointRange<Float> = -100f..100f,
     onValueChange: (Float) -> Unit
 ) {
-    // Вычисляем отображение текста: если больше 0, добавляем "+", иначе просто число
+    // Вычисляем отображение текста
     val displayValue = if (value > 0) "+${value.toInt()}" else "${value.toInt()}"
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = FocusDesign.paddingSmall)
-            .height(FocusDesign.sliderHeight) // 44.dp из FocusDesign
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -40,7 +40,7 @@ fun FocusSlider(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = label.uppercase(), // Если нужен капс как на скрине
+                text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 color = AppleGray
             )
@@ -55,13 +55,11 @@ fun FocusSlider(
         Slider(
             value = value,
             onValueChange = onValueChange,
-            valueRange = -100f..100f,
+            valueRange = valueRange,
             colors = SliderDefaults.colors(
                 thumbColor = Color.White,
                 activeTrackColor = iOSBlue,
-                inactiveTrackColor = Color.DarkGray.copy(alpha = 0.3f),
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent
+                inactiveTrackColor = Color.DarkGray.copy(alpha = 0.3f)
             ),
             modifier = Modifier.fillMaxWidth()
         )

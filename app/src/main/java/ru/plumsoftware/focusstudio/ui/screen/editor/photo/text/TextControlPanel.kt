@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,51 +40,46 @@ fun TextControlPanel(
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (selectedText == null) {
-            // Состояние: текст не выбран. Показываем кнопку добавления в стиле iOS
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            // Кнопка добавления по центру
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Surface(
                     onClick = {
                         val newText = TextElement(
-                            text = "Tap to edit",
-                            position = Offset(400f, 400f), // Центрируем примерно
+                            text = "Новый текст",
+                            position = Offset(500f, 500f),
                             color = Color.White,
-                            fontSize = 30f
+                            fontSize = 40f,
+                            fontFamily = "Default"
                         )
                         onUpdate(settings.copy(texts = settings.texts + newText))
                     },
                     color = iOSBlue,
-                    shape = RoundedCornerShape(FocusDesign.cornerMedium),
-                    modifier = Modifier.height(FocusDesign.languageToggleSize)
+                    shape = RoundedCornerShape(FocusDesign.cornerMedium)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = FocusDesign.paddingMedium),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(FocusDesign.paddingSmall))
-                        Text(
-                            "Добавить текст",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White
-                        )
+                    Row(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Icon(Icons.Default.Add, null, tint = Color.White)
+                        Text("Добавить текст", color = Color.White)
                     }
                 }
             }
         } else {
-            TextEditPanel(
-                selectedText = selectedText,
-                onUpdate = { updatedElement ->
-                    val newList = settings.texts.map {
-                        if (it.id == updatedElement.id) updatedElement else it
-                    }
-                    onUpdate(settings.copy(texts = newList))
-                },
-                onClose = onClose
-            )
+            // ПАНЕЛЬ РЕДАКТИРОВАНИЯ ВНИЗУ
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter) // Прижимаем к низу
+            ) {
+                TextEditPanel(
+                    selectedText = selectedText,
+                    onUpdate = { updatedElement ->
+                        val newList = settings.texts.map {
+                            if (it.id == updatedElement.id) updatedElement else it
+                        }
+                        onUpdate(settings.copy(texts = newList))
+                    },
+                    onClose = onClose
+                )
+            }
         }
     }
 }

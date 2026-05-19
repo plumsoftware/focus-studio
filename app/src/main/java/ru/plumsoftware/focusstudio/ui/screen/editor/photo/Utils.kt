@@ -132,33 +132,44 @@ fun saveEditedImage(
     val inputStream = resolver.openInputStream(originalUri)
     val originalBitmap = BitmapFactory.decodeStream(inputStream) ?: return
 
-    // 1. Считаем коэффициент масштабирования (Экран -> Оригинал)
-    val scaleFactor = originalBitmap.width.toFloat() / displaySize.width.toFloat()
+    // Получаем плотность экрана (например, 2.0, 3.0 и т.д.)
+    val screenDensity = context.resources.displayMetrics.density
 
-    // 2. Параметры кропа
+    // --- ШАГ 1: Считаем реальный размер и смещение фото на экране ---
+    val bitmapWidth = originalBitmap.width.toFloat()
+    val bitmapHeight = originalBitmap.height.toFloat()
+    val containerWidth = displaySize.width.toFloat()
+    val containerHeight = displaySize.height.toFloat()
+
+    val scaleFit = minOf(containerWidth / bitmapWidth, containerHeight / bitmapHeight)
+    val actualImageOnScreenWidth = bitmapWidth * scaleFit
+    val actualImageOnScreenHeight = bitmapHeight * scaleFit
+
+    val offsetX = (containerWidth - actualImageOnScreenWidth) / 2f
+    val offsetY = (containerHeight - actualImageOnScreenHeight) / 2f
+
+    // Коэффициент масштабирования (Экранные пиксели -> Пиксели файла)
+    val scaleFactor = bitmapWidth / actualImageOnScreenWidth
+
+    // --- ШАГ 2: Кроп ---
     val crop = settings.cropRect
-    val left = (originalBitmap.width * crop.left).toInt()
-    val top = (originalBitmap.height * crop.top).toInt()
-    val width = (originalBitmap.width * (crop.right - crop.left)).toInt()
-    val height = (originalBitmap.height * (crop.bottom - crop.top)).toInt()
+    val left = (bitmapWidth * crop.left).toInt()
+    val top = (bitmapHeight * crop.top).toInt()
+    val width = (bitmapWidth * (crop.right - crop.left)).toInt()
+    val height = (bitmapHeight * (crop.bottom - crop.top)).toInt()
 
-    // 3. Вырезаем кусок
     val croppedBitmap = Bitmap.createBitmap(originalBitmap, left, top, width, height)
-
-    // 4. Применяем фильтры и РАЗМЫТИЕ (RenderScript для API 23)
     val processedBitmap = applyEffectsToBitmap(context, croppedBitmap, settings)
 
-    // 5. Создаем финальный холст высокого разрешения
     val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(resultBitmap)
     canvas.drawBitmap(processedBitmap, 0f, 0f, null)
 
-    // 6. Отрисовка ФИГУР (теперь они точно попадут на фото)
+    // --- ШАГ 3: Отрисовка ФИГУР ---
     settings.shapes.forEach { shape ->
         canvas.withSave {
-            // Масштабируем и двигаем фигуру относительно вырезанного куска
-            val posX = (shape.position.x * scaleFactor) - left
-            val posY = (shape.position.y * scaleFactor) - top
+            val posX = ((shape.position.x - offsetX) * scaleFactor) - left
+            val posY = ((shape.position.y - offsetY) * scaleFactor) - top
 
             translate(posX, posY)
             rotate(shape.rotation)
@@ -177,29 +188,29 @@ fun saveEditedImage(
                 drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = shape.strokeColor.toArgb()
                     style = Paint.Style.STROKE
-                    strokeWidth = 2f * scaleFactor
+                    // Толщину обводки тоже нужно масштабировать с учетом плотности
+                    strokeWidth = 2f * screenDensity * scaleFactor
                 })
             }
         }
     }
 
-    // 7. Отрисовка ТЕКСТА
+    // --- ШАГ 4: Отрисовка ТЕКСТА ---
     settings.texts.forEach { text ->
-        // Используем TextPaint вместо обычного Paint (нужен для StaticLayout)
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = text.color.toArgb()
-            textSize = text.fontSize * scaleFactor
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            // ИСПРАВЛЕНИЕ: Умножаем на screenDensity
+            // Так как в UI используется .sp, реальный размер в пикселях = fontSize * density
+            textSize = text.fontSize * screenDensity * scaleFactor
+            typeface = getAndroidTypeface(context, text.fontFamily)
         }
 
-        val posX = (text.position.x * scaleFactor) - left
-        val posY = (text.position.y * scaleFactor) - top
+        val posX = ((text.position.x - offsetX) * scaleFactor) - left
+        val posY = ((text.position.y - offsetY) * scaleFactor) - top
 
-        // Измеряем ширину текста для макета (чтобы он не обрезался)
-        // Если в редакторе есть фиксированная ширина, лучше использовать её, помноженную на scaleFactor
+        // Ширина текста также должна учитывать масштабирование
         val textWidth = textPaint.measureText(text.text).toInt().coerceAtLeast(1)
 
-        // Создаем макет многострочного текста
         val staticLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(text.text, 0, text.text.length, textPaint, textWidth)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -207,26 +218,16 @@ fun saveEditedImage(
                 .setIncludePad(false)
                 .build()
         } else {
-            @Suppress("DEPRECATION")
-            StaticLayout(
-                text.text,
-                textPaint,
-                textWidth,
-                Layout.Alignment.ALIGN_NORMAL,
-                1.0f,
-                0.0f,
-                false
-            )
+            StaticLayout(text.text, textPaint, textWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false)
         }
 
-        // Рисуем текст через Layout
         canvas.withSave {
-            translate(posX, posY) // Перемещаемся в нужную точку
-            staticLayout.draw(this) // Рисуем весь блок текста со всеми переносами
+            translate(posX, posY)
+            staticLayout.draw(this)
         }
     }
 
-    // 8. Сохранение в галерею
+    // --- ШАГ 5: Сохранение ---
     val filename = "Focus_${System.currentTimeMillis()}.jpg"
     val contentValues = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -243,10 +244,8 @@ fun saveEditedImage(
         }
     }
 
-    // Чистка
     croppedBitmap.recycle()
     processedBitmap.recycle()
-
     onComplete(uri)
 }
 

@@ -80,6 +80,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.CropPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.filter.FilterRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getCombinedMatrix
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.saveEditedImage
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeComponent
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeControlPanel
@@ -293,6 +294,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             text = textItem.text,
                             color = textItem.color,
                             fontSize = textItem.fontSize.sp,
+                            fontFamily = getFontFamily(textItem.fontFamily),
                             modifier = Modifier
                                 .offset {
                                     IntOffset(
@@ -304,12 +306,9 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                     detectDragGestures(
                                         onDrag = { change, dragAmount ->
                                             change.consume()
-                                            // МГНОВЕННОЕ обновление позиции на экране без тяжелой рекомпозиции всего экрана
                                             localOffset += dragAmount
                                         },
                                         onDragEnd = {
-                                            // Только когда палец отпущен, сохраняем финальную позицию в историю
-                                            // Копируем из currentTextState, чтобы НЕ ПОТЕРЯТЬ введенный текст, цвет и размер
                                             val finalUpdate =
                                                 currentTextState.copy(position = localOffset)
                                             updateSettings(

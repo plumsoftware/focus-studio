@@ -42,7 +42,7 @@ import com.yandex.mobile.ads.common.ImpressionData
 import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.IosPermissionDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
-import ru.plumsoftware.focusstudio.ui.screen.editor.video.VideoEditorScreen
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.screen.VideoEditorScreen
 
 class MainActivity : ComponentActivity() {
 

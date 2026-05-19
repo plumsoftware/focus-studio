@@ -41,10 +41,17 @@ fun VideoFilterRow(
     onFilterSelected: (ColorMatrix?, String) -> Unit
 ) {
     val filters = listOf(
-        Triple("Нет", null, "None"),
-        Triple("Нуар", FilterMatrices.Noir, "Noir"),
-        Triple("Винтаж", FilterMatrices.Vintage, "Vintage"),
-        Triple("Кино", FilterMatrices.Cinema, "Cinema")
+        Triple("Оригинал", FilterMatrices.None, "None"),
+        Triple("Vivid", FilterMatrices.Vivid, "Vivid"),
+        Triple("Sepia", FilterMatrices.Sepia, "Sepia"),
+        Triple("Polaroid", FilterMatrices.Polaroid, "Polaroid"),
+        Triple("Cinema", FilterMatrices.Kodachrome, "Kodachrome"),
+        Triple("Dramatic", FilterMatrices.DramaticBW, "DramaticBW"),
+        Triple("Night", FilterMatrices.NightVision, "NightVision"),
+        Triple("Invert", FilterMatrices.Invert, "Invert"),
+        Triple("Noir", FilterMatrices.Noir, "Noir"),
+        Triple("Vintage", FilterMatrices.Vintage, "Vintage"),
+        Triple("Cold", FilterMatrices.Cold, "Cold")
     )
 
     LazyRow(

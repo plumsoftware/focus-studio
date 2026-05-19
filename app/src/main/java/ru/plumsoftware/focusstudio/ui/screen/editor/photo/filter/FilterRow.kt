@@ -33,13 +33,17 @@ import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 @Composable
 fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) {
     val filters = listOf(
-        Triple(stringResource(R.string.filter_none), FilterMatrices.None, "None"),
-        Triple(stringResource(R.string.filter_vintage), FilterMatrices.Vintage, "Vintage"),
-        Triple(stringResource(R.string.filter_noir), FilterMatrices.Noir, "Noir"),
-        Triple(stringResource(R.string.filter_cinema), FilterMatrices.Cinema, "Cinema"),
-        Triple(stringResource(R.string.filter_warm), FilterMatrices.Warm, "Warm"),
-        Triple(stringResource(R.string.filter_cold), FilterMatrices.Cold, "Cold"),
-        Triple(stringResource(R.string.filter_vivid), FilterMatrices.Vivid, "Vivid")
+        Triple("Оригинал", FilterMatrices.None, "None"),
+        Triple("Vivid", FilterMatrices.Vivid, "Vivid"),
+        Triple("Sepia", FilterMatrices.Sepia, "Sepia"),
+        Triple("Polaroid", FilterMatrices.Polaroid, "Polaroid"),
+        Triple("Cinema", FilterMatrices.Kodachrome, "Kodachrome"),
+        Triple("Dramatic", FilterMatrices.DramaticBW, "DramaticBW"),
+        Triple("Night", FilterMatrices.NightVision, "NightVision"),
+        Triple("Invert", FilterMatrices.Invert, "Invert"),
+        Triple("Noir", FilterMatrices.Noir, "Noir"),
+        Triple("Vintage", FilterMatrices.Vintage, "Vintage"),
+        Triple("Cold", FilterMatrices.Cold, "Cold")
     )
 
     LazyRow(

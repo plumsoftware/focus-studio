@@ -1,11 +1,11 @@
-package ru.plumsoftware.focusstudio.ui.screen.editor.video
+package ru.plumsoftware.focusstudio.ui.screen.editor.video.screen
 
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.RenderEffect
 import android.media.MediaMetadataRetriever
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -13,16 +13,14 @@ import android.view.TextureView
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,17 +30,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -70,24 +63,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import com.yandex.mobile.ads.common.AdError
 import com.yandex.mobile.ads.common.AdRequest
 import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
@@ -97,8 +90,8 @@ import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorTopBar
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
@@ -110,16 +103,18 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.PhotoSettingsAdap
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoTools
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.exportVideo
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.filter.VideoFilterRow
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.getCombinedMatrixVideo
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.music.MusicPanel
-import ru.plumsoftware.focusstudio.ui.screen.editor.video.shape.VideoShapeControlPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.shape.VideoTimeline
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.timeline.TrimButton
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.trimClipsLogic
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 import kotlin.math.roundToInt
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(UnstableApi::class)
 @Composable
 fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     val context = LocalContext.current
@@ -137,7 +132,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
 
     // ID выбранных объектов
     var selectedTextId by remember { mutableStateOf<String?>(null) }
-    var playerViewSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var playerViewSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
 
     // --- СОСТОЯНИЕ РЕКЛАМЫ ---
@@ -163,7 +158,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         if (interstitialAd != null && activity != null) {
             interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
                 override fun onAdShown() {}
-                override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) {
+                override fun onAdFailedToShow(adError: AdError) {
                     // Если реклама не смогла показаться, пользователь просто увидит диалог
                 }
 
@@ -454,7 +449,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             // ПРИМЕНЕНИЕ ФИЛЬТРА (API 31+)
                             if (settings.selectedFilter != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 renderEffect =
-                                    android.graphics.RenderEffect.createColorFilterEffect(
+                                    RenderEffect.createColorFilterEffect(
                                         ColorMatrixColorFilter(android.graphics.ColorMatrix(settings.selectedFilter!!.values))
                                     ).asComposeRenderEffect()
                             } else {
@@ -510,6 +505,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             text = textItem.text,
                             color = textItem.color,
                             fontSize = textItem.fontSize.sp,
+                            fontFamily = getFontFamily(textItem.fontFamily),
                             modifier = Modifier
                                 .offset {
                                     IntOffset(
