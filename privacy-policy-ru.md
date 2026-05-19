@@ -44,4 +44,4 @@
 ## Контакты
 
 Если у вас есть вопросы или предложения, вы можете связаться с Поставщиком услуг по email:
-plumsoftwareofficial@gmail.com
+Plumsoftware@yandex.ru
