@@ -159,10 +159,17 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
 
     val fileName = remember(photoUri) {
         photoUri?.let { uri ->
-            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                cursor.moveToFirst()
-                cursor.getString(nameIndex)
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1 && cursor.moveToFirst()) {
+                        cursor.getString(nameIndex)
+                    } else {
+                        uri.lastPathSegment ?: "image.png"
+                    }
+                } ?: uri.lastPathSegment ?: "image.png"
+            } catch (e: Exception) {
+                uri.lastPathSegment ?: "image.png"
             }
         } ?: "Unknown.png"
     }

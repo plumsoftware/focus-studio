@@ -38,19 +38,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.plumsoftware.focusstudio.R
+import ru.plumsoftware.focusstudio.copyUriToCache
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
@@ -60,22 +66,45 @@ import ru.plumsoftware.focusstudio.ui.theme.iOSPurple
 
 @Composable
 fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Состояние процесса копирования файла
+    var isImportingFile by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            val encodedUri = Uri.encode(uri.toString())
-            navController.navigate("${Routes.PHOTO_EDITOR}/$encodedUri")
+            isImportingFile = true
+            scope.launch {
+                val cachedUri = withContext(Dispatchers.IO) {
+                    copyUriToCache(context, uri)
+                }
+                isImportingFile = false
+                if (cachedUri != null) {
+                    val encodedUri = Uri.encode(cachedUri.toString())
+                    navController.navigate("${Routes.PHOTO_EDITOR}/$encodedUri")
+                }
+            }
         }
     }
 
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            val encodedUri = Uri.encode(it.toString())
-            navController.navigate("${Routes.VIDEO_EDITOR}/$encodedUri")
+        if (uri != null) {
+            isImportingFile = true
+            scope.launch {
+                val cachedUri = withContext(Dispatchers.IO) {
+                    copyUriToCache(context, uri)
+                }
+                isImportingFile = false
+                if (cachedUri != null) {
+                    val encodedUri = Uri.encode(cachedUri.toString())
+                    navController.navigate("${Routes.VIDEO_EDITOR}/$encodedUri")
+                }
+            }
         }
     }
 
@@ -83,7 +112,6 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Заменяем системный фон на жесткий черный в стиле iOS
                 .background(Color.Black)
                 .statusBarsPadding()
                 .padding(FocusDesign.paddingLarge)
@@ -93,7 +121,6 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
 
             Spacer(modifier = Modifier.height(FocusDesign.mainSpacing))
 
-            // Badge "Профессиональная студия"
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = Color.Transparent,
@@ -108,7 +135,6 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                 )
             }
 
-            // Заголовок
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displayMedium,
@@ -125,7 +151,6 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Карточки выбора
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingMedium)
@@ -144,20 +169,18 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                     desc = stringResource(R.string.photo_desc),
                     icon = Icons.Default.Image,
                     iconColor = iOSPurple,
-                    onClick = {
-                        photoPickerLauncher.launch("image/*")
-                    }
+                    onClick = { photoPickerLauncher.launch("image/*") }
                 )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Нижние бейджи (4K RAW и т.д.)
             TechInfoRow()
         }
 
+        // Общий индикатор загрузки для рекламы и копирования файлов
         AnimatedVisibility(
-            visible = isAdsLoading,
+            visible = isAdsLoading || isImportingFile,
             enter = fadeIn(animationSpec = tween(300)),
             exit = fadeOut(animationSpec = tween(300))
         ) {
@@ -178,8 +201,9 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(48.dp))
                     Text(
-                        text = "Загрузка рекламы",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = if (isAdsLoading) "Загрузка рекламы" else "Импорт файла...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White
                     )
                 }
             }
@@ -269,63 +293,5 @@ fun TechInfoRow() {
                 Spacer(modifier = Modifier.width(FocusDesign.paddingLarge))
             }
         }
-    }
-}
-
-@Composable
-fun LanguageToggle() {
-    var selectedLanguage by remember { mutableStateOf("RU") }
-
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.05f)) // Тонкая подложка для всего ряда
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(FocusDesign.paddingExtraSmall),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        LanguageButton(
-            text = "RU",
-            isSelected = selectedLanguage == "RU",
-            onClick = { selectedLanguage = "RU" }
-        )
-        LanguageButton(
-            text = "US",
-            isSelected = selectedLanguage == "US",
-            onClick = { selectedLanguage = "US" }
-        )
-    }
-}
-
-@Composable
-private fun LanguageButton(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor = if (isSelected) {
-        Color.White.copy(alpha = 0.15f) // Светлее для активного
-    } else {
-        Color.Transparent
-    }
-
-    val textColor = if (isSelected) Color.White else AppleGray
-
-    Box(
-        modifier = Modifier
-            .size(FocusDesign.languageToggleSize)
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
-            ),
-            color = textColor
-        )
     }
 }

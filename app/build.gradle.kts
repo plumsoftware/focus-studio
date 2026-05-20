@@ -14,12 +14,12 @@ android {
         applicationId = "ru.plumsoftware.focusstudio"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("int", "PLATFORM", "1")
+        buildConfigField("int", "PLATFORM", "3")
 
         renderscriptTargetApi = 23
         renderscriptSupportModeEnabled = true
@@ -74,11 +74,11 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Exoplayer
-    implementation("androidx.media3:media3-exoplayer:1.3.1")
-    implementation("androidx.media3:media3-ui:1.3.1")
-    implementation("androidx.media3:media3-transformer:1.3.1")
-    implementation("androidx.media3:media3-effect:1.3.1")
-    implementation("androidx.media3:media3-common:1.3.1")
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("androidx.media3:media3-transformer:1.6.1")
+    implementation("androidx.media3:media3-effect:1.6.1")
+    implementation("androidx.media3:media3-common:1.6.1")
 
     // Compose UI
     implementation(libs.androidx.ui.graphics)

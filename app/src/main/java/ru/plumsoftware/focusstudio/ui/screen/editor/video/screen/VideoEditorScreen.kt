@@ -90,6 +90,7 @@ import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
+import ru.plumsoftware.focusstudio.ui.screen.IosExportErrorDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
@@ -127,6 +128,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
 
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
+    var showExportErrorDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
@@ -205,13 +207,19 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     // Извлечение реального имени файла
     val fileName = remember(videoUri) {
         videoUri?.let { uri ->
-            var name = "video.mp4"
-            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1 && cursor.moveToFirst()) name = cursor.getString(nameIndex)
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1 && cursor.moveToFirst()) {
+                        cursor.getString(nameIndex)
+                    } else {
+                        uri.lastPathSegment ?: "video.mp4"
+                    }
+                } ?: uri.lastPathSegment ?: "video.mp4"
+            } catch (e: Exception) {
+                uri.lastPathSegment ?: "video.mp4"
             }
-            name
-        } ?: "Project.mp4"
+        } ?: "Unknown.mp4"
     }
 
     // ФУНКЦИЯ ОБНОВЛЕНИЯ ПЛЕЕРА И ГРАНИЦ (Вызывается при любом изменении клипов)
@@ -282,12 +290,20 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     // Инициализация первым видео
     LaunchedEffect(videoUri) {
         if (videoUri != null && settings.clips.isEmpty()) {
+            var duration = 0L
             val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, videoUri)
-            val duration =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong()
-                    ?: 0L
-            retriever.release()
+            try {
+                retriever.setDataSource(context, videoUri)
+                duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
 
             val firstClip = VideoClip(uri = videoUri, durationMs = duration, endMs = duration)
             applyClipsChange(listOf(firstClip))
@@ -405,7 +421,9 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
             EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {
                 isExporting = true
                 isPlaying = false
-                exoPlayer.pause()
+
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
 
                 exportVideo(
                     context = context,
@@ -417,6 +435,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                         if (uri != null) {
                             showExportDialog = true
                             showAdAndDialog()
+                        } else {
+                            showExportErrorDialog = true
                         }
 
                         refreshPlaylist()
@@ -736,6 +756,10 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     )
                 }
             }
+        }
+
+        if (showExportErrorDialog) {
+            IosExportErrorDialog(onDismiss = { showExportErrorDialog = false })
         }
 
         if (showExportDialog) {

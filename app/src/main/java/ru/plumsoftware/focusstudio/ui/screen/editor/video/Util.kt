@@ -124,14 +124,22 @@ fun exportVideo(
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt()
                 ?: 1920
 
-        // ВАЖНО: Если видео повернуто на 90/270 градусов, меняем ширину и высоту местами
-        if (rotation == 90 || rotation == 270) {
-            vW = rawH
-            vH = rawW
+        // Определяем размеры с учетом ориентации
+        val targetW = if (rotation == 90 || rotation == 270) rawH else rawW
+        val targetH = if (rotation == 90 || rotation == 270) rawW else rawH
+
+        // Ограничиваем максимальное разрешение до 720p для стабильности кодеков на слабых GPU
+        val maxDimension = 1280
+        val scaleFactor = if (targetW > maxDimension || targetH > maxDimension) {
+            maxDimension.toFloat() / maxOf(targetW, targetH).toFloat()
         } else {
-            vW = rawW
-            vH = rawH
+            1f
         }
+
+        // Выравниваем стороны кадра строго кратно 16 (критично для чипов Unisoc/MediaTek)
+        vW = (((targetW * scaleFactor).toInt() / 16) * 16).coerceAtLeast(16)
+        vH = (((targetH * scaleFactor).toInt() / 16) * 16).coerceAtLeast(16)
+
     } catch (e: Exception) {
         onResult(null)
         return
@@ -139,7 +147,6 @@ fun exportVideo(
         retriever.release()
     }
 
-    // 2. Создаем Bitmap оверлей под РЕАЛЬНЫЙ размер видео
     val overlayBitmap = Bitmap.createBitmap(vW, vH, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(overlayBitmap)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
@@ -149,7 +156,6 @@ fun exportVideo(
 
     // РИСУЕМ ФИГУРЫ
     settings.shapes.forEach { shape ->
-        // Если в редакторе вы используете dp, здесь нужно умножить на density
         val scaledWidth = shape.size.width * density * scale
         val scaledHeight = shape.size.height * density * scale
         val posX = shape.position.x * scale
@@ -169,7 +175,7 @@ fun exportVideo(
         if (shape.strokeColor != androidx.compose.ui.graphics.Color.Transparent) {
             paint.style = android.graphics.Paint.Style.STROKE
             paint.color = shape.strokeColor.toArgb()
-            paint.strokeWidth = 2f * density * scale // Обводка тоже должна масштабироваться
+            paint.strokeWidth = 2f * density * scale
             canvas.drawPath(path, paint)
         }
         canvas.restore()
@@ -179,7 +185,6 @@ fun exportVideo(
     settings.texts.forEach { text ->
         val textPaint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = text.color.toArgb()
-            // fontSize (в SP) * density * scale = размер в пикселях видео
             textSize = text.fontSize * density * scale
             typeface = android.graphics.Typeface.create(
                 android.graphics.Typeface.DEFAULT,
@@ -191,14 +196,12 @@ fun exportVideo(
         val ty = text.position.y * scale
 
         canvas.save()
-        // Небольшая коррекция ty: Compose рисует текст чуть ниже,
-        // чем StaticLayout из-за внутренних отступов шрифта.
         canvas.translate(tx, ty)
 
         val maxWidth = (vW - tx).toInt().coerceAtLeast(1)
         val staticLayout = android.text.StaticLayout.Builder
             .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
-            .setIncludePad(false) // Убираем лишние отступы для точности
+            .setIncludePad(false)
             .build()
 
         staticLayout.draw(canvas)
@@ -208,18 +211,24 @@ fun exportVideo(
     // 3. ПОДГОТОВКА ЭФФЕКТОВ
     val videoEffects = mutableListOf<androidx.media3.common.Effect>()
 
-    // Сначала фильтр
+    // Сначала накладываем цветовой фильтр
     settings.selectedFilter?.let { videoEffects.add(FocusVideoFilter(it)) }
 
-    // Затем оверлей
+    videoEffects.add(
+        androidx.media3.effect.Presentation.createForWidthAndHeight(
+            vW,
+            vH,
+            androidx.media3.effect.Presentation.LAYOUT_SCALE_TO_FIT
+        )
+    )
+
+    // Затем накладываем оверлей с фигурами и текстом
     if (settings.shapes.isNotEmpty() || settings.texts.isNotEmpty()) {
         val bitmapOverlay =
             androidx.media3.effect.BitmapOverlay.createStaticBitmapOverlay(overlayBitmap)
         videoEffects.add(
             androidx.media3.effect.OverlayEffect(
-                com.google.common.collect.ImmutableList.of(
-                    bitmapOverlay
-                )
+                listOf<androidx.media3.effect.TextureOverlay>(bitmapOverlay)
             )
         )
     }
@@ -239,16 +248,36 @@ fun exportVideo(
         EditedMediaItem.Builder(mediaItem)
             .setEffects(
                 androidx.media3.transformer.Effects(
-                    com.google.common.collect.ImmutableList.of(),
-                    com.google.common.collect.ImmutableList.copyOf(videoEffects)
+                    emptyList(),
+                    videoEffects
                 )
             )
             .build()
     }
 
+    // --- ФИЛЬТР КОДЕКОВ ---
+    // Создаем селектор, который полностью отсекает проблемные кодеки "unisoc"
+    val customEncoderSelector = androidx.media3.transformer.EncoderSelector { mimeType ->
+        val encoders = androidx.media3.transformer.EncoderUtil.getSupportedEncoders(mimeType)
+        val filtered = mutableListOf<android.media.MediaCodecInfo>()
+        for (i in 0 until encoders.size) {
+            val encoder = encoders[i]
+            if (!encoder.name.lowercase().contains("unisoc")) {
+                filtered.add(encoder)
+            }
+        }
+        ImmutableList.copyOf(if (filtered.isNotEmpty()) filtered else encoders)
+    }
+
     // 5. ТРАНСФОРМЕР
     val transformer = Transformer.Builder(context)
-        .setEncoderFactory(DefaultEncoderFactory.Builder(context).setEnableFallback(true).build())
+        .setEncoderFactory(
+            DefaultEncoderFactory.Builder(context)
+                .setVideoEncoderSelector(customEncoderSelector) // Передаем селектор без Unisoc
+                .setEnableFallback(true)
+                .build()
+        )
+        // Возвращаем H.264 (софтверный AVC кодек работает максимально быстро и безглючно)
         .setVideoMimeType(MimeTypes.VIDEO_H264)
         .build()
 
