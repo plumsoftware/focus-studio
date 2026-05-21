@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.media.metrics.LogSessionId
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -274,9 +275,10 @@ fun exportVideo(
     val transformer = Transformer.Builder(context)
         .setEncoderFactory(ForceAospEncoderFactory(context))
         .setVideoMimeType(MimeTypes.VIDEO_H264)
+        .setAudioMimeType(MimeTypes.AUDIO_AAC)
         .build()
 
-    val composition = Composition.Builder(listOf(EditedMediaItemSequence(editedItems))).build()
+    val composition = Composition.Builder(listOf(EditedMediaItemSequence.Builder(editedItems).build())).build()
 
     transformer.addListener(object : Transformer.Listener {
         override fun onCompleted(c: Composition, r: ExportResult) {
@@ -405,51 +407,52 @@ class FocusVideoFilter(private val composeMatrix: androidx.compose.ui.graphics.C
     }
 }
 
+// Исправление ForceAospEncoderFactory
 @androidx.media3.common.util.UnstableApi
 class ForceAospEncoderFactory(private val context: Context) :
     androidx.media3.transformer.Codec.EncoderFactory {
 
     private val delegate = androidx.media3.transformer.DefaultEncoderFactory.Builder(context)
-        .setEnableFallback(false) // Отключаем fallback — он возвращает к unisoc
+        .setEnableFallback(false)
         .build()
 
     override fun createForAudioEncoding(
-        format: androidx.media3.common.Format
+        format: androidx.media3.common.Format,
+        logSessionId: LogSessionId?
     ): androidx.media3.transformer.Codec {
-        return delegate.createForAudioEncoding(format)
+        return delegate.createForAudioEncoding(format, logSessionId)
     }
 
     override fun createForVideoEncoding(
-        format: androidx.media3.common.Format
+        format: androidx.media3.common.Format,
+        logSessionId: LogSessionId?
     ): androidx.media3.transformer.Codec {
-        // Находим ТОЛЬКО софтварный AOSP энкодер, игнорируем unisoc/hardware
         val mimeType = format.sampleMimeType ?: MimeTypes.VIDEO_H264
         val encoders = androidx.media3.transformer.EncoderUtil.getSupportedEncoders(mimeType)
 
-        // Приоритет: сначала c2.android (AOSP soft), потом OMX.google, потом всё кроме unisoc
-        val preferred = encoders.firstOrNull {
-            it.name.startsWith("c2.android")
-        } ?: encoders.firstOrNull {
-            it.name.startsWith("OMX.google")
-        } ?: encoders.firstOrNull {
-            !it.name.lowercase().contains("unisoc") &&
-                    !it.name.lowercase().contains("sprd")
-        }
+        // Логируем что доступно — для отладки
+        encoders.forEach { android.util.Log.d("EncoderFactory", "Available: ${it.name}") }
 
-        // Если нашли подходящий — форсируем его через модифицированный format
-        val safeFormat = if (preferred != null) {
-            // Понижаем разрешение если нужно для совместимости с софт-энкодером
-            val maxDim = 720 // Софт-энкодер стабилен до 720p
-            if (format.width > maxDim || format.height > maxDim) {
-                val scale = maxDim.toFloat() / maxOf(format.width, format.height)
-                format.buildUpon()
-                    .setWidth(((format.width * scale).toInt() / 2) * 2)
-                    .setHeight(((format.height * scale).toInt() / 2) * 2)
-                    .build()
-            } else format
+        val preferred = encoders.firstOrNull { it.name.startsWith("c2.android") }
+            ?: encoders.firstOrNull { it.name.startsWith("OMX.google") }
+            ?: encoders.firstOrNull {
+                !it.name.lowercase().contains("unisoc") &&
+                        !it.name.lowercase().contains("sprd")
+            }
+
+        android.util.Log.d("EncoderFactory", "Selected: ${preferred?.name ?: "fallback"}")
+
+        // Понижаем разрешение до 480p для совместимости с AOSP софт-энкодером
+        val maxDim = 480
+        val safeFormat = if (format.width > maxDim || format.height > maxDim) {
+            val scale = maxDim.toFloat() / maxOf(format.width, format.height)
+            format.buildUpon()
+                .setWidth(((format.width * scale).toInt() / 2) * 2)
+                .setHeight(((format.height * scale).toInt() / 2) * 2)
+                .build()
         } else format
 
-        return delegate.createForVideoEncoding(safeFormat)
+        return delegate.createForVideoEncoding(safeFormat, logSessionId)
     }
 
     override fun audioNeedsEncoding(): Boolean = delegate.audioNeedsEncoding()

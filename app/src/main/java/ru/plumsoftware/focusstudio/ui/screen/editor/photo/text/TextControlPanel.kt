@@ -23,63 +23,65 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextElement
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
+import java.util.UUID
 
 @Composable
 fun TextControlPanel(
     settings: PhotoSettings,
     selectedTextId: String?,
     onUpdate: (PhotoSettings) -> Unit,
+    onSelectText: (String) -> Unit,
     onClose: () -> Unit
 ) {
     val selectedText = settings.texts.find { it.id == selectedTextId }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (selectedText == null) {
-            // Кнопка добавления по центру
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Surface(
                     onClick = {
+                        val newId = UUID.randomUUID().toString()
                         val newText = TextElement(
+                            id = newId,
                             text = "Новый текст",
-                            position = Offset(500f, 500f),
+                            position = Offset(0f, 0f), // ТЕПЕРЬ В ЦЕНТРЕ
                             color = Color.White,
                             fontSize = 40f,
                             fontFamily = "Default"
                         )
                         onUpdate(settings.copy(texts = settings.texts + newText))
+                        onSelectText(newId) // АВТО-ВЫБОР
                     },
                     color = iOSBlue,
                     shape = RoundedCornerShape(FocusDesign.cornerMedium)
                 ) {
-                    Row(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(Icons.Default.Add, null, tint = Color.White)
-                        Text("Добавить текст", color = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Добавить текст", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         } else {
-            // ПАНЕЛЬ РЕДАКТИРОВАНИЯ ВНИЗУ
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter) // Прижимаем к низу
-            ) {
-                TextEditPanel(
-                    selectedText = selectedText,
-                    onUpdate = { updatedElement ->
-                        val newList = settings.texts.map {
-                            if (it.id == updatedElement.id) updatedElement else it
-                        }
-                        onUpdate(settings.copy(texts = newList))
-                    },
-                    onClose = onClose
-                )
-            }
+            TextEditPanel(
+                selectedText = selectedText,
+                onUpdate = { updatedElement ->
+                    val newList = settings.texts.map {
+                        if (it.id == updatedElement.id) updatedElement else it
+                    }
+                    onUpdate(settings.copy(texts = newList))
+                },
+                onClose = onClose
+            )
         }
     }
 }

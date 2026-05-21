@@ -725,11 +725,15 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                 TextControlPanel(
                                     settings = PhotoSettingsAdapter.toPhoto(settings),
                                     selectedTextId = selectedTextId,
-                                    onUpdate = {
-                                        settings = PhotoSettingsAdapter.toVideo(it, settings)
+                                    onUpdate = { photoSettings ->
+                                        settings = PhotoSettingsAdapter.toVideo(photoSettings, settings)
+                                    },
+                                    onSelectText = { id ->
+                                        selectedTextId = id
                                     },
                                     onClose = {
-                                        selectedTextId = null; activeTool = VideoTools.TIMELINE
+                                        selectedTextId = null
+                                        activeTool = VideoTools.TIMELINE
                                     }
                                 )
                             }

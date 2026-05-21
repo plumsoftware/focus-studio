@@ -427,7 +427,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                 settings = currentSettings,
                                 selectedTextId = selectedTextId,
                                 onUpdate = { updateSettings(it) },
-                                onClose = { selectedTextId = null }
+                                onSelectText = { id ->
+                                    selectedTextId = id
+                                },
+                                onClose = {
+                                    selectedTextId = null
+                                }
                             )
 
                             EditorTools.SHAPES -> ShapeControlPanel(

@@ -74,11 +74,11 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Exoplayer
-    implementation("androidx.media3:media3-exoplayer:1.6.1")
-    implementation("androidx.media3:media3-ui:1.6.1")
-    implementation("androidx.media3:media3-transformer:1.6.1")
-    implementation("androidx.media3:media3-effect:1.6.1")
-    implementation("androidx.media3:media3-common:1.6.1")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-ui:1.10.1")
+    implementation("androidx.media3:media3-transformer:1.10.1")
+    implementation("androidx.media3:media3-effect:1.10.1")
+    implementation("androidx.media3:media3-common:1.10.1")
 
     // Compose UI
     implementation(libs.androidx.ui.graphics)
