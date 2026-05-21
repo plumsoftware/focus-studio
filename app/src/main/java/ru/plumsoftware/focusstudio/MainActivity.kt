@@ -39,6 +39,7 @@ import com.yandex.mobile.ads.common.AdError
 import com.yandex.mobile.ads.common.AdRequest
 import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
+import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.IosPermissionDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
@@ -93,7 +94,12 @@ class MainActivity : ComponentActivity() {
                         add(Manifest.permission.READ_MEDIA_VIDEO)
                     } else {
                         add(Manifest.permission.READ_EXTERNAL_STORAGE)
-                        add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        add(Manifest.permission.WRITE_EXTERNAL_STORAGE) // Уже есть — ок
+                    }
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        if (!contains(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                            add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        }
                     }
                 }.toTypedArray()
             }
@@ -113,6 +119,7 @@ class MainActivity : ComponentActivity() {
 
             // 4. При старте запускаем ТОЛЬКО запрос разрешений
             LaunchedEffect(key1 = Unit) {
+                delay(300)
                 permissionLauncher.launch(permissionsToRequest)
             }
 

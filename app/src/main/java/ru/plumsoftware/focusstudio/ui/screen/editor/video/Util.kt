@@ -45,6 +45,8 @@ import kotlinx.coroutines.*
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.concat
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.createAndroidShapePath
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.ShapeType
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getAndroidTypeface
+import java.io.FileOutputStream
 
 fun trimClipsLogic(clips: List<VideoClip>, globalStart: Long, globalEnd: Long): List<VideoClip> {
     val result = mutableListOf<VideoClip>()
@@ -101,10 +103,6 @@ fun exportVideo(
     displaySize: androidx.compose.ui.unit.IntSize,
     onResult: (Uri?) -> Unit
 ) {
-    if (displaySize.width <= 0 || displaySize.height <= 0 || settings.clips.isEmpty()) {
-        onResult(null)
-        return
-    }
 
     val outputFileName = "Focus_Export_${System.currentTimeMillis()}.mp4"
     val outputFile = java.io.File(context.cacheDir, outputFileName)
@@ -112,6 +110,9 @@ fun exportVideo(
     val retriever = MediaMetadataRetriever()
     val vW: Int
     val vH: Int
+
+
+
     try {
         retriever.setDataSource(context, settings.clips.first().uri)
         val rotation =
@@ -129,7 +130,7 @@ fun exportVideo(
         val targetH = if (rotation == 90 || rotation == 270) rawW else rawH
 
         // Ограничиваем максимальное разрешение до 720p для стабильности кодеков на слабых GPU
-        val maxDimension = 1280
+        val maxDimension = 720
         val scaleFactor = if (targetW > maxDimension || targetH > maxDimension) {
             maxDimension.toFloat() / maxOf(targetW, targetH).toFloat()
         } else {
@@ -151,6 +152,9 @@ fun exportVideo(
     val canvas = android.graphics.Canvas(overlayBitmap)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     overlayBitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+
+    val safeDisplayWidth = if (displaySize.width <= 0) vW else displaySize.width
+    val safeDisplayHeight = if (displaySize.height <= 0) vH else displaySize.height
 
     val scale = vW.toFloat() / displaySize.width.toFloat()
 
@@ -186,10 +190,7 @@ fun exportVideo(
         val textPaint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = text.color.toArgb()
             textSize = text.fontSize * density * scale
-            typeface = android.graphics.Typeface.create(
-                android.graphics.Typeface.DEFAULT,
-                android.graphics.Typeface.BOLD
-            )
+            typeface = getAndroidTypeface(context, text.fontFamily)
         }
 
         val tx = text.position.x * scale
@@ -271,13 +272,7 @@ fun exportVideo(
 
     // 5. ТРАНСФОРМЕР
     val transformer = Transformer.Builder(context)
-        .setEncoderFactory(
-            DefaultEncoderFactory.Builder(context)
-                .setVideoEncoderSelector(customEncoderSelector) // Передаем селектор без Unisoc
-                .setEnableFallback(true)
-                .build()
-        )
-        // Возвращаем H.264 (софтверный AVC кодек работает максимально быстро и безглючно)
+        .setEncoderFactory(ForceAospEncoderFactory(context))
         .setVideoMimeType(MimeTypes.VIDEO_H264)
         .build()
 
@@ -309,20 +304,56 @@ fun exportVideo(
 
 // Хелпер сохранения (убедись, что он в проекте)
 private fun saveVideoToGallery(context: Context, file: File, fileName: String): Uri? {
-    val values = ContentValues().apply {
-        put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
-        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/FocusStudio")
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+ (включая EMUI 13)
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/FocusStudio")
+                put(MediaStore.Video.Media.IS_PENDING, 1) // Блокируем файл на время записи
+            }
+            val uri = context.contentResolver.insert(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values
+            ) ?: return null
+
+            context.contentResolver.openOutputStream(uri)?.use { output ->
+                file.inputStream().use { input -> input.copyTo(output) }
+            }
+
+            // Снимаем флаг pending — файл теперь виден в галерее
+            values.clear()
+            values.put(MediaStore.Video.Media.IS_PENDING, 0)
+            context.contentResolver.update(uri, values, null, null)
+            uri
+        } else {
+            // Android 9 и ниже (EMUI 9) — старый способ через File + MediaScanner
+            val moviesDir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_MOVIES
+            )
+            val appDir = File(moviesDir, "FocusStudio").apply { mkdirs() }
+            val destFile = File(appDir, fileName)
+
+            file.inputStream().use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            // КРИТИЧНО для EMUI 9: без MediaScanner файл не появится в галерее!
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(destFile.absolutePath),
+                arrayOf("video/mp4"),
+                null
+            )
+
+            Uri.fromFile(destFile)
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
-    val uri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-    uri?.let {
-        context.contentResolver.openOutputStream(it)?.use { output ->
-            file.inputStream().use { input -> input.copyTo(output) }
-        }
-    }
-    return uri
 }
 
 // Версия для Видео
@@ -372,4 +403,55 @@ class FocusVideoFilter(private val composeMatrix: androidx.compose.ui.graphics.C
             v[3], v[8], v[13], v[18]  // Колонка 4
         )
     }
+}
+
+@androidx.media3.common.util.UnstableApi
+class ForceAospEncoderFactory(private val context: Context) :
+    androidx.media3.transformer.Codec.EncoderFactory {
+
+    private val delegate = androidx.media3.transformer.DefaultEncoderFactory.Builder(context)
+        .setEnableFallback(false) // Отключаем fallback — он возвращает к unisoc
+        .build()
+
+    override fun createForAudioEncoding(
+        format: androidx.media3.common.Format
+    ): androidx.media3.transformer.Codec {
+        return delegate.createForAudioEncoding(format)
+    }
+
+    override fun createForVideoEncoding(
+        format: androidx.media3.common.Format
+    ): androidx.media3.transformer.Codec {
+        // Находим ТОЛЬКО софтварный AOSP энкодер, игнорируем unisoc/hardware
+        val mimeType = format.sampleMimeType ?: MimeTypes.VIDEO_H264
+        val encoders = androidx.media3.transformer.EncoderUtil.getSupportedEncoders(mimeType)
+
+        // Приоритет: сначала c2.android (AOSP soft), потом OMX.google, потом всё кроме unisoc
+        val preferred = encoders.firstOrNull {
+            it.name.startsWith("c2.android")
+        } ?: encoders.firstOrNull {
+            it.name.startsWith("OMX.google")
+        } ?: encoders.firstOrNull {
+            !it.name.lowercase().contains("unisoc") &&
+                    !it.name.lowercase().contains("sprd")
+        }
+
+        // Если нашли подходящий — форсируем его через модифицированный format
+        val safeFormat = if (preferred != null) {
+            // Понижаем разрешение если нужно для совместимости с софт-энкодером
+            val maxDim = 720 // Софт-энкодер стабилен до 720p
+            if (format.width > maxDim || format.height > maxDim) {
+                val scale = maxDim.toFloat() / maxOf(format.width, format.height)
+                format.buildUpon()
+                    .setWidth(((format.width * scale).toInt() / 2) * 2)
+                    .setHeight(((format.height * scale).toInt() / 2) * 2)
+                    .build()
+            } else format
+        } else format
+
+        return delegate.createForVideoEncoding(safeFormat)
+    }
+
+    override fun audioNeedsEncoding(): Boolean = delegate.audioNeedsEncoding()
+    override fun videoNeedsEncoding(): Boolean = delegate.videoNeedsEncoding()
 }
