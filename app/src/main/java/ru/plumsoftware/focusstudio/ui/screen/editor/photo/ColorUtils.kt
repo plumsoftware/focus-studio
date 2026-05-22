@@ -37,6 +37,8 @@ fun getFontFamily(name: String): FontFamily {
         "ruthless sketch" -> FontFamily(Font(ru.plumsoftware.focusstudio.R.font.ruthless_sketch))
         "montserrat underline" -> FontFamily(Font(ru.plumsoftware.focusstudio.R.font.montserrat_underline))
         "old soviet" -> FontFamily(Font(ru.plumsoftware.focusstudio.R.font.old_soviet))
+        "aa stetica" -> FontFamily(Font(ru.plumsoftware.focusstudio.R.font.aa_stetica))
+        "accidental presidency" -> FontFamily(Font(ru.plumsoftware.focusstudio.R.font.accid))
         else -> FontFamily.Default
     }
 }

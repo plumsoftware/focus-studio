@@ -50,13 +50,13 @@ fun TextControlPanel(
                         val newText = TextElement(
                             id = newId,
                             text = "Новый текст",
-                            position = Offset(0f, 0f), // ТЕПЕРЬ В ЦЕНТРЕ
+                            position = Offset(0f, 0f),
                             color = Color.White,
                             fontSize = 40f,
                             fontFamily = "Default"
                         )
                         onUpdate(settings.copy(texts = settings.texts + newText))
-                        onSelectText(newId) // АВТО-ВЫБОР
+                        onSelectText(newId)
                     },
                     color = iOSBlue,
                     shape = RoundedCornerShape(FocusDesign.cornerMedium)

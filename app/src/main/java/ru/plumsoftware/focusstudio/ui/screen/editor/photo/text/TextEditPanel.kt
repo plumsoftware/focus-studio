@@ -105,9 +105,9 @@ fun TextEditPanel(
         // 2. Выбор шрифта
         Text("ШРИФТ", color = AppleGray, style = MaterialTheme.typography.labelSmall)
         val fontList = listOf(
-            "Default", "Serif", "Sans serif", "Monospace", "Cursive",
+            "Default", "Serif", "Sans serif", "Monospace",
             "SF Pro", "Google Sans", "Passions Conflict",
-            "Ruthless Sketch", "Montserrat Underline", "Old Soviet"
+            "Ruthless Sketch", "Montserrat Underline", "Old Soviet", "AA Stetica", "Accidental Presidency"
         )
 
         LazyRow(
