@@ -56,20 +56,20 @@ fun IosExportDialog(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Кнопка в стиле iOS (с тонкими разделителями)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .background(Color.White.copy(alpha = 0.05f))
-                        .clickable { onGoToGallery() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Перейти в галерею",
-                        color = Color(0xFF0A84FF), // iOS System Blue
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+//                Box(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .height(44.dp)
+//                        .background(Color.White.copy(alpha = 0.05f))
+//                        .clickable { onGoToGallery() },
+//                    contentAlignment = Alignment.Center
+//                ) {
+//                    Text(
+//                        text = "Перейти в галерею",
+//                        color = Color(0xFF0A84FF), // iOS System Blue
+//                        fontWeight = FontWeight.SemiBold
+//                    )
+//                }
 
                 Divider(color = Color.White.copy(alpha = 0.1f), thickness = 0.5.dp)
 

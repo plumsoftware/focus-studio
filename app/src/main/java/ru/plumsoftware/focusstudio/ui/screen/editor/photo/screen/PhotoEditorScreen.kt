@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.yandex.mobile.ads.common.AdError
 import com.yandex.mobile.ads.common.AdRequest
 import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
@@ -108,7 +109,6 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     val adLoader = remember { InterstitialAdLoader(context) }
 
-    // Загрузка рекламы при входе на экран
     LaunchedEffect(Unit) {
         val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
         adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
@@ -122,34 +122,35 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         })
     }
 
-    val showAdAndDialog = {
-        showExportDialog = true
+    val showAdAndThenDialog = {
         if (interstitialAd != null && activity != null) {
             interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
                 override fun onAdShown() {}
-                override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) {
-                    // Если реклама не смогла показаться, пользователь просто увидит диалог
+
+                override fun onAdFailedToShow(adError: AdError) {
+                    showExportDialog = true
                 }
 
                 override fun onAdDismissed() {
-                    // Реклама закрыта, под ней уже висит наш диалог
+                    showExportDialog = true
                 }
 
                 override fun onAdClicked() {}
                 override fun onAdImpression(impressionData: ImpressionData?) {}
             })
             interstitialAd?.show(activity)
+        } else {
+            // Если реклама не загружена, просто показываем диалог
+            showExportDialog = true
         }
     }
 
     // Логика истории
     fun updateSettings(newSettings: PhotoSettings) {
         if (newSettings != currentSettings) {
-            // Удаляем "будущее", если мы отменили действия и начали новое
             while (history.size > currentIndex + 1) history.removeAt(history.size - 1)
             history.add(newSettings)
             currentIndex++
-            // Ограничение истории для экономии памяти (например, 30 шагов)
             if (history.size > 30) {
                 history.removeAt(0)
                 currentIndex--
@@ -184,19 +185,21 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                 if (photoUri != null && !isExporting) {
                     isExporting = true
                     saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
-                        showExportDialog = true
                         isExporting = false
-                        if (uri != null)
-                            showAdAndDialog()
+                        if (uri != null) {
+                            showAdAndThenDialog()
+                        }
                     }
                 }
             })
         },
         containerColor = Color.Black
     ) { padding ->
-        Column(modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
 
             // 1. ОБЛАСТЬ ИЗОБРАЖЕНИЯ
             Box(
@@ -445,30 +448,30 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     }
                 }
             }
-        }
 
-        if (showExportDialog) {
-            IosExportDialog(
-                onDismiss = { showExportDialog = false },
-                onGoToGallery = {
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        type = "image/*"
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            if (showExportDialog) {
+                IosExportDialog(
+                    onDismiss = { showExportDialog = false },
+                    onGoToGallery = {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            type = "image/*"
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(intent)
+                        showExportDialog = false
                     }
-                    context.startActivity(intent)
-                    showExportDialog = false
-                }
-            )
-        }
+                )
+            }
 
-        if (isExporting) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = iOSBlue)
+            if (isExporting) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = iOSBlue)
+                }
             }
         }
     }

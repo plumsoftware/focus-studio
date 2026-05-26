@@ -137,22 +137,32 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var playerViewSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
 
-    // --- СОСТОЯНИЕ РЕКЛАМЫ ---
+    // --- ЛОГИКА РЕКЛАМЫ ---
     var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     val adLoader = remember { InterstitialAdLoader(context) }
 
-    // Загрузка рекламы при входе на экран
     LaunchedEffect(Unit) {
         val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
         adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
-            override fun onAdLoaded(ad: InterstitialAd) {
-                interstitialAd = ad
-            }
-
-            override fun onAdFailedToLoad(error: AdRequestError) {
-                interstitialAd = null
-            }
+            override fun onAdLoaded(ad: InterstitialAd) { interstitialAd = ad }
+            override fun onAdFailedToLoad(error: AdRequestError) { interstitialAd = null }
         })
+    }
+
+    // ФУНКЦИЯ: ПОКАЗ РЕКЛАМЫ, ЗАТЕМ ДИАЛОГА
+    val showAdAndThenDialog = {
+        if (interstitialAd != null && activity != null) {
+            interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
+                override fun onAdShown() {}
+                override fun onAdFailedToShow(adError: AdError) { showExportDialog = true }
+                override fun onAdDismissed() { showExportDialog = true } // Показываем диалог ПОСЛЕ рекламы
+                override fun onAdClicked() {}
+                override fun onAdImpression(impressionData: ImpressionData?) {}
+            })
+            interstitialAd?.show(activity)
+        } else {
+            showExportDialog = true // Если рекламы нет - сразу диалог
+        }
     }
 
     val showAdAndDialog = {
@@ -433,8 +443,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     onResult = { uri ->
                         isExporting = false
                         if (uri != null) {
-                            showExportDialog = true
-                            showAdAndDialog()
+                            showAdAndThenDialog()
                         } else {
                             showExportErrorDialog = true
                         }
