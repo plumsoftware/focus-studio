@@ -607,13 +607,13 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                 activeTool == VideoTools.FILTERS
                             ) { activeTool = VideoTools.FILTERS }
                         }
-                        item {
-                            EditorToolItem(
-                                Icons.Default.MusicNote,
-                                "Music",
-                                activeTool == VideoTools.MUSIC
-                            ) { activeTool = VideoTools.MUSIC }
-                        }
+//                        item {
+//                            EditorToolItem(
+//                                Icons.Default.MusicNote,
+//                                "Music",
+//                                activeTool == VideoTools.MUSIC
+//                            ) { activeTool = VideoTools.MUSIC }
+//                        }
                         item {
                             EditorToolItem(
                                 Icons.Default.TextFields,
