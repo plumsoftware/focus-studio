@@ -26,8 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.FocusSlider
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
@@ -41,10 +43,9 @@ fun MusicPanel(
     onRemoveMusic: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        SectionTitle("Музыка")
+        SectionTitle(stringResource(R.string.music_title))
 
         if (settings.audioUri == null) {
-            // Состояние: Музыка не добавлена
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -56,11 +57,14 @@ fun MusicPanel(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Add, null, tint = iOSBlue, modifier = Modifier.size(32.dp))
-                    Text("Добавить аудио", color = iOSBlue, style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        stringResource(R.string.music_add),
+                        color = iOSBlue,
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
             }
         } else {
-            // Состояние: Музыка добавлена
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -72,7 +76,7 @@ fun MusicPanel(
                     Icon(Icons.Default.MusicNote, null, tint = iOSBlue)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = settings.audioFileName ?: "Аудио трек",
+                        text = settings.audioFileName ?: stringResource(R.string.music_track_default),
                         color = Color.White,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
@@ -85,9 +89,8 @@ fun MusicPanel(
 
                 Spacer(Modifier.height(16.dp))
 
-                // Громкость (iOS Style)
                 FocusSlider(
-                    label = "Громкость",
+                    label = stringResource(R.string.param_volume),
                     value = settings.audioVolume * 100f,
                     onValueChange = { onVolumeChange(it / 100f) }
                 )
@@ -97,7 +100,7 @@ fun MusicPanel(
                 onClick = onAddMusic,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
-                Text("Заменить трек", color = iOSBlue)
+                Text(stringResource(R.string.music_replace), color = iOSBlue)
             }
         }
     }

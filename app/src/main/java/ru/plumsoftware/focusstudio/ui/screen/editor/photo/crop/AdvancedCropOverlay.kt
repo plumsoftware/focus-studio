@@ -26,7 +26,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
@@ -130,7 +132,7 @@ fun AdvancedCropOverlay(
             shape = CircleShape
         ) {
             Text(
-                "КАДРИРОВАТЬ",
+                stringResource(R.string.btn_crop_apply).uppercase(),
                 color = Color.White,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
                 style = MaterialTheme.typography.labelMedium

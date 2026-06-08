@@ -17,11 +17,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -35,13 +37,13 @@ fun IosPermissionDialog(onDismiss: () -> Unit, onGoToSettings: () -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(Modifier.height(20.dp))
                 Text(
-                    "Доступ к медиа",
+                    stringResource(R.string.permission_title),
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Чтобы редактировать фото и видео, приложению нужен доступ к вашей галерее.",
+                    stringResource(R.string.permission_message),
                     textAlign = TextAlign.Center,
                     color = Color.White,
                     fontSize = 13.sp,
@@ -54,7 +56,11 @@ fun IosPermissionDialog(onDismiss: () -> Unit, onGoToSettings: () -> Unit) {
                     Modifier.fillMaxWidth().height(44.dp).clickable { onGoToSettings() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Настройки", color = iOSBlue, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.permission_go_settings),
+                        color = iOSBlue,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Divider(color = Color.White.copy(0.1f), thickness = 0.5.dp)
@@ -63,7 +69,7 @@ fun IosPermissionDialog(onDismiss: () -> Unit, onGoToSettings: () -> Unit) {
                     Modifier.fillMaxWidth().height(44.dp).clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Отмена", color = iOSBlue)
+                    Text(stringResource(R.string.btn_cancel), color = iOSBlue)
                 }
             }
         }

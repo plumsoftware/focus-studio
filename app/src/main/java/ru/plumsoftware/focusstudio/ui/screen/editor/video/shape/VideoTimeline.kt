@@ -1,5 +1,9 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.video.shape
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -9,6 +13,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -30,10 +35,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.formatTimeSmart
@@ -48,6 +58,7 @@ fun VideoTimeline(
     onClipsChange: (List<VideoClip>) -> Unit
 ) {
     val totalDuration = settings.clips.sumOf { it.endMs - it.startMs }.coerceAtLeast(1L)
+    val primaryClipUri = settings.clips.firstOrNull()?.uri
 
     key(totalDuration) {
         val actualEndMs = if (settings.endMs <= 0L) totalDuration else settings.endMs
@@ -63,10 +74,17 @@ fun VideoTimeline(
         }
 
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            // Таймкоды
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatTimeSmart(localTrackerPos.longValue, totalDuration), color = Color.White, style = MaterialTheme.typography.labelSmall)
-                Text(formatTimeSmart(totalDuration, totalDuration), color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    formatTimeSmart(localTrackerPos.longValue, totalDuration),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    formatTimeSmart(totalDuration, totalDuration),
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
 
             BoxWithConstraints(Modifier.fillMaxWidth().height(80.dp)) {
@@ -80,12 +98,24 @@ fun VideoTimeline(
                 val endPx = msToPx(localEndMs.longValue)
                 val trackerPx = msToPx(localTrackerPos.longValue)
 
-                // ТАЙМЛАЙН КОНТЕЙНЕР
                 Box(Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter)) {
-                    // Подложка
-                    Box(Modifier.fillMaxWidth().height(32.dp).align(Alignment.Center).background(Color.White.copy(0.1f), CircleShape))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(32.dp)
+                            .align(Alignment.Center)
+                            .background(Color.White.copy(0.1f), CircleShape)
+                    )
 
-                    // РИСУЕМ СЕГМЕНТЫ КЛИПОВ
+                    TimelineFrameStrip(
+                        clipUri = primaryClipUri,
+                        totalDurationMs = totalDuration,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(32.dp)
+                            .align(Alignment.Center)
+                    )
+
                     var accumulatedMs = 0L
                     settings.clips.forEachIndexed { index, clip ->
                         val clipDur = clip.endMs - clip.startMs
@@ -97,27 +127,26 @@ fun VideoTimeline(
                                 .offset { IntOffset(clipStartOff.toInt(), 16.dp.toPx().toInt()) }
                                 .width(with(density) { clipWidth.toDp() })
                                 .height(32.dp)
-                                .background(if (index % 2 == 0) iOSBlue.copy(0.1f) else Color.White.copy(0.05f))
-                                .border(0.5.dp, Color.White.copy(0.2f))
+                                .background(if (index % 2 == 0) iOSBlue.copy(0.05f) else Color.Transparent)
+                                .border(0.5.dp, Color.White.copy(0.15f))
                         )
                         accumulatedMs += clipDur
                     }
 
-                    // СИНЯЯ ЗОНА ОБРЕЗКИ ПОВЕРХ ВСЕГО
                     val regionWidth = (endPx - startPx).coerceAtLeast(0f)
                     Box(
                         Modifier
                             .offset { IntOffset(startPx.toInt(), 16.dp.run { toPx().toInt() }) }
                             .width(with(density) { regionWidth.toDp() })
                             .height(32.dp)
-                            .background(iOSBlue.copy(0.2f))
+                            .background(iOSBlue.copy(0.15f))
                             .border(2.dp, iOSBlue, RoundedCornerShape(4.dp))
                     )
 
-                    // РУЧКИ
                     Handle(offsetPx = startPx) { deltaX ->
                         isDragging = true
-                        val newStart = pxToMs(msToPx(localStartMs.longValue) + deltaX).coerceAtMost(localEndMs.longValue - 500)
+                        val newStart = pxToMs(msToPx(localStartMs.longValue) + deltaX)
+                            .coerceAtMost(localEndMs.longValue - 500)
                         localStartMs.longValue = newStart
                         localTrackerPos.longValue = newStart
                         onSeek(newStart)
@@ -125,13 +154,13 @@ fun VideoTimeline(
                     }
                     Handle(offsetPx = endPx) { deltaX ->
                         isDragging = true
-                        val newEnd = pxToMs(msToPx(localEndMs.longValue) + deltaX).coerceAtLeast(localStartMs.longValue + 500)
+                        val newEnd = pxToMs(msToPx(localEndMs.longValue) + deltaX)
+                            .coerceAtLeast(localStartMs.longValue + 500)
                         localEndMs.longValue = newEnd
                         onSeek(newEnd)
                         onRangeChange(localStartMs.longValue, newEnd)
                     }
 
-                    // ТРЕКЕР ВРЕМЕНИ
                     Box(
                         Modifier
                             .offset { IntOffset(trackerPx.toInt() - 6, 0) }
@@ -159,7 +188,64 @@ fun VideoTimeline(
     }
 }
 
-// Добавим в Handle сброс флага
+@Composable
+private fun TimelineFrameStrip(
+    clipUri: Uri?,
+    totalDurationMs: Long,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val frameCount = 10
+    var frames by remember(clipUri) { mutableStateOf<List<Bitmap?>>(List(frameCount) { null }) }
+
+    LaunchedEffect(clipUri, totalDurationMs) {
+        if (clipUri == null) {
+            frames = List(frameCount) { null }
+            return@LaunchedEffect
+        }
+        frames = List(frameCount) { null }
+        val loaded = withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, clipUri)
+                (0 until frameCount).map { index ->
+                    val timeUs = if (totalDurationMs > 0) {
+                        totalDurationMs * 1000L * index / frameCount
+                    } else {
+                        index * 500_000L
+                    }
+                    retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                }
+            } catch (_: Exception) {
+                List(frameCount) { null }
+            } finally {
+                retriever.release()
+            }
+        }
+        frames = loaded
+    }
+
+    Row(modifier = modifier) {
+        frames.forEach { bitmap ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(Color.Gray.copy(alpha = 0.35f))
+            ) {
+                bitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun Handle(offsetPx: Float, onDrag: (Float) -> Unit) {
     Box(
@@ -169,7 +255,7 @@ private fun Handle(offsetPx: Float, onDrag: (Float) -> Unit) {
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { },
-                    onDragEnd = { /* Флаг сбросится в родителе */ },
+                    onDragEnd = { },
                     onDrag = { change, dragAmount ->
                         change.consume()
                         onDrag(dragAmount.x)
@@ -178,8 +264,10 @@ private fun Handle(offsetPx: Float, onDrag: (Float) -> Unit) {
             },
         contentAlignment = Alignment.Center
     ) {
-        Box(Modifier
-            .size(6.dp, 24.dp)
-            .background(Color.White, CircleShape))
+        Box(
+            Modifier
+                .size(6.dp, 24.dp)
+                .background(Color.White, CircleShape)
+        )
     }
 }

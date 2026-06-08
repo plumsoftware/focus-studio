@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.ShapeElement
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.ShapeType
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.ColorPickerRow
@@ -37,7 +39,7 @@ fun VideoShapeControlPanel(
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (selectedShape == null) {
-            SectionTitle("Добавить фигуру")
+            SectionTitle(stringResource(R.string.shape_add))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ShapeType.entries.forEach { type ->
                     ShapeSelectItem(type) {
@@ -46,26 +48,36 @@ fun VideoShapeControlPanel(
                 }
             }
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 IconButton(onClick = {
                     onUpdate(settings.copy(shapes = settings.shapes.filter { it.id != selectedShapeId }))
                     onClose()
                 }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
-                Text("Настройка фигуры", color = Color.White)
+                Text(stringResource(R.string.shape_settings_full), color = Color.White)
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, null, tint = Color.White) }
             }
 
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                FocusSlider("Поворот", selectedShape.rotation / 1.8f) {
+                FocusSlider(
+                    label = stringResource(R.string.param_rotation),
+                    value = selectedShape.rotation / 1.8f
+                ) {
                     val updated = selectedShape.copy(rotation = it * 1.8f)
                     onUpdate(settings.copy(shapes = settings.shapes.map { s -> if (s.id == updated.id) updated else s }))
                 }
-                Text("Заливка", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    stringResource(R.string.label_fill),
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.labelSmall
+                )
                 ColorPickerRow(selectedShape.fillColor) { color ->
                     val updated = selectedShape.copy(fillColor = color)
                     onUpdate(settings.copy(shapes = settings.shapes.map { s -> if (s.id == updated.id) updated else s }))
                 }
-                // ... аналогично для контура
             }
         }
     }

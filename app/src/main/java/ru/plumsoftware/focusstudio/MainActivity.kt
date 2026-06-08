@@ -41,6 +41,7 @@ import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
+import ru.plumsoftware.focusstudio.data.AppPrefs
 import ru.plumsoftware.focusstudio.ui.screen.IosPermissionDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.screen.VideoEditorScreen
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
             var showPermissionDialog by remember { mutableStateOf(false) }
             val context = LocalContext.current
             val navController = rememberNavController()
+            val shouldShowLaunchAd = remember { AppPrefs.shouldShowLaunchAd(context) }
 
             // 1. Выносим логику загрузки рекламы в отдельную функцию
             val startLoadingAds: () -> Unit = {
@@ -113,8 +115,11 @@ class MainActivity : ComponentActivity() {
                     showPermissionDialog = true
                 }
 
-                // Реклама запускается в любом случае после ответа на разрешения
-                startLoadingAds()
+                if (shouldShowLaunchAd) {
+                    startLoadingAds()
+                } else {
+                    AppPrefs.markFirstLaunchComplete(context)
+                }
             }
 
             // 4. При старте запускаем ТОЛЬКО запрос разрешений

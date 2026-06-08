@@ -1,5 +1,6 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.photo.text
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,13 +42,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.FocusSlider
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextElement
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
@@ -58,6 +60,23 @@ import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
+private data class FontOption(val key: String, @StringRes val labelRes: Int)
+
+private val fontOptions = listOf(
+    FontOption("Default", R.string.font_default),
+    FontOption("Serif", R.string.font_serif),
+    FontOption("Sans serif", R.string.font_sans_serif),
+    FontOption("Monospace", R.string.font_monospace),
+    FontOption("SF Pro", R.string.font_sf_pro),
+    FontOption("Google Sans", R.string.font_google_sans),
+    FontOption("Passions Conflict", R.string.font_passions_conflict),
+    FontOption("Ruthless Sketch", R.string.font_ruthless_sketch),
+    FontOption("Montserrat Underline", R.string.font_montserrat_underline),
+    FontOption("Old Soviet", R.string.font_old_soviet),
+    FontOption("AA Stetica", R.string.font_aa_stetica),
+    FontOption("Accidental Presidency", R.string.font_accidental_presidency)
+)
+
 @Composable
 fun TextEditPanel(
     selectedText: TextElement,
@@ -65,7 +84,6 @@ fun TextEditPanel(
     onClose: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
-    // Состояние скролла
     val scrollState = rememberScrollState()
 
     Column(
@@ -74,18 +92,24 @@ fun TextEditPanel(
             .heightIn(max = 400.dp)
             .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             .background(DarkSurface)
-            .verticalScroll(scrollState) // ВКЛЮЧАЕМ СКРОЛЛ
+            .verticalScroll(scrollState)
             .padding(FocusDesign.paddingMedium)
     ) {
-        // Шапка
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Настроить текст", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(R.string.text_edit_title),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium
+            )
             IconButton(onClick = onClose) {
                 Icon(Icons.Default.Close, null, tint = Color.White)
             }
         }
 
-        // 1. Поле ввода (внутри панели шрифт уже применяется)
         BasicTextField(
             value = selectedText.text,
             onValueChange = { onUpdate(selectedText.copy(text = it)) },
@@ -102,44 +126,47 @@ fun TextEditPanel(
 
         Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
 
-        // 2. Выбор шрифта
-        Text("ШРИФТ", color = AppleGray, style = MaterialTheme.typography.labelSmall)
-        val fontList = listOf(
-            "Default", "Serif", "Sans serif", "Monospace",
-            "SF Pro", "Google Sans", "Passions Conflict",
-            "Ruthless Sketch", "Montserrat Underline", "Old Soviet", "AA Stetica", "Accidental Presidency"
+        Text(
+            stringResource(R.string.label_font).uppercase(),
+            color = AppleGray,
+            style = MaterialTheme.typography.labelSmall
         )
 
         LazyRow(
             modifier = Modifier.padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(fontList) { fontName ->
-                val isSelected = selectedText.fontFamily == fontName
+            items(fontOptions) { option ->
+                val isSelected = selectedText.fontFamily == option.key
                 Surface(
-                    onClick = { onUpdate(selectedText.copy(fontFamily = fontName)) },
+                    onClick = { onUpdate(selectedText.copy(fontFamily = option.key)) },
                     color = if (isSelected) iOSBlue else Color.White.copy(0.1f),
                     shape = RoundedCornerShape(FocusDesign.cornerMedium)
                 ) {
                     Text(
-                        text = fontName,
+                        text = stringResource(option.labelRes),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         color = Color.White,
-                        style = TextStyle(fontFamily = getFontFamily(fontName), fontSize = 14.sp)
+                        style = TextStyle(fontFamily = getFontFamily(option.key), fontSize = 14.sp)
                     )
                 }
             }
         }
 
-        // 3. Размер
-        FocusSlider("Размер", selectedText.fontSize, valueRange = 10f..100f) {
+        FocusSlider(
+            label = stringResource(R.string.param_size),
+            value = selectedText.fontSize,
+            valueRange = 10f..100f
+        ) {
             onUpdate(selectedText.copy(fontSize = it))
         }
 
-        // 4. Цвета
-        Text("ЦВЕТ", color = AppleGray, style = MaterialTheme.typography.labelSmall)
+        Text(
+            stringResource(R.string.label_color).uppercase(),
+            color = AppleGray,
+            style = MaterialTheme.typography.labelSmall
+        )
 
-        // Обернул в Column, чтобы HEX-пикер не уезжал
         Column(modifier = Modifier.fillMaxWidth()) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -165,7 +192,6 @@ fun TextEditPanel(
                 }
             }
 
-            // HEX Пикер вынес чуть ниже, чтобы было удобнее нажимать
             var hexInput by remember(selectedText.color) { mutableStateOf(selectedText.color.toHex()) }
 
             Row(
@@ -203,7 +229,6 @@ fun TextEditPanel(
             }
         }
 
-        // Дополнительный отступ снизу для комфортного скролла
         Spacer(modifier = Modifier.height(20.dp))
     }
 }

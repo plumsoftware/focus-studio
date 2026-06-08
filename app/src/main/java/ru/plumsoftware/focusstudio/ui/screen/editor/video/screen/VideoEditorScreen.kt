@@ -33,14 +33,15 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.ui.res.stringResource
+import ru.plumsoftware.focusstudio.R
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -214,8 +215,10 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_ONE }
     }
 
-    // Извлечение реального имени файла
-    val fileName = remember(videoUri) {
+    val unknownFileName = stringResource(R.string.file_unknown_video)
+    val defaultFileName = stringResource(R.string.file_video_default)
+
+    val fileName = remember(videoUri, unknownFileName, defaultFileName) {
         videoUri?.let { uri ->
             try {
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -223,13 +226,13 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     if (nameIndex != -1 && cursor.moveToFirst()) {
                         cursor.getString(nameIndex)
                     } else {
-                        uri.lastPathSegment ?: "video.mp4"
+                        uri.lastPathSegment ?: defaultFileName
                     }
-                } ?: uri.lastPathSegment ?: "video.mp4"
+                } ?: uri.lastPathSegment ?: defaultFileName
             } catch (e: Exception) {
-                uri.lastPathSegment ?: "video.mp4"
+                uri.lastPathSegment ?: defaultFileName
             }
-        } ?: "Unknown.mp4"
+        } ?: unknownFileName
     }
 
     // ФУНКЦИЯ ОБНОВЛЕНИЯ ПЛЕЕРА И ГРАНИЦ (Вызывается при любом изменении клипов)
@@ -374,6 +377,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         }
 
     // Лаунчер для выбора музыки
+    val defaultMusicFileName = stringResource(R.string.music_file_default)
+
     val musicPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
@@ -381,7 +386,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
                         val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                         if (idx != -1 && cursor.moveToFirst()) cursor.getString(idx) else null
-                    } ?: "music.mp3"
+                    } ?: defaultMusicFileName
 
                 settings = settings.copy(audioUri = it, audioFileName = name)
                 audioPlayer.setMediaItem(MediaItem.fromUri(it))
@@ -408,6 +413,10 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         if (settings.audioUri != null) {
             audioPlayer.playWhenReady = isPlaying
         }
+    }
+
+    LaunchedEffect(settings.playbackSpeed) {
+        exoPlayer.setPlaybackSpeed(settings.playbackSpeed)
     }
 
     fun syncSeek(ms: Long) {
@@ -588,22 +597,22 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     ) {
                         item {
                             EditorToolItem(
-                                Icons.Default.History,
-                                "Timeline",
+                                Icons.Outlined.History,
+                                stringResource(R.string.tab_timeline),
                                 activeTool == VideoTools.TIMELINE
                             ) { activeTool = VideoTools.TIMELINE }
                         }
                         item {
                             EditorToolItem(
-                                Icons.Default.VideoLibrary,
-                                "Clips",
+                                Icons.Outlined.VideoLibrary,
+                                stringResource(R.string.tab_clips),
                                 activeTool == VideoTools.CLIPS
                             ) { activeTool = VideoTools.CLIPS }
                         }
                         item {
                             EditorToolItem(
-                                Icons.Default.AutoAwesome,
-                                "Filters",
+                                Icons.Outlined.AutoAwesome,
+                                stringResource(R.string.tab_filters),
                                 activeTool == VideoTools.FILTERS
                             ) { activeTool = VideoTools.FILTERS }
                         }
@@ -616,15 +625,15 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
 //                        }
                         item {
                             EditorToolItem(
-                                Icons.Default.TextFields,
-                                "Text",
+                                Icons.Outlined.TextFields,
+                                stringResource(R.string.tab_text),
                                 activeTool == VideoTools.TEXT
                             ) { activeTool = VideoTools.TEXT }
                         }
                         item {
                             EditorToolItem(
-                                Icons.Default.Category,
-                                "Shapes",
+                                Icons.Outlined.Category,
+                                stringResource(R.string.tab_shapes),
                                 activeTool == VideoTools.SHAPES
                             ) { activeTool = VideoTools.SHAPES }
                         }
@@ -638,7 +647,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                         when (activeTool) {
                             VideoTools.TIMELINE -> {
                                 Column {
-                                    SectionTitle("Timeline")
+                                    SectionTitle(stringResource(R.string.label_timeline))
                                     VideoTimeline(
                                         settings = settings,
                                         currentPosition = currentPos,
@@ -649,14 +658,19 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                         onClipsChange = { applyClipsChange(it) }
                                     )
                                     Spacer(Modifier.height(16.dp))
-                                    TrimButton(onClick = {
-                                        val trimmed = trimClipsLogic(
-                                            settings.clips,
-                                            settings.startMs,
-                                            settings.endMs
-                                        )
-                                        applyClipsChange(trimmed)
-                                    })
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        TrimButton(onClick = {
+                                            val trimmed = trimClipsLogic(
+                                                settings.clips,
+                                                settings.startMs,
+                                                settings.endMs
+                                            )
+                                            applyClipsChange(trimmed)
+                                        })
+                                    }
                                 }
                             }
 
@@ -668,12 +682,16 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                         val newList =
                                             settings.clips.toMutableList().apply { removeAt(index) }
                                         applyClipsChange(newList)
+                                    },
+                                    onSpeedChange = { speed ->
+                                        settings = settings.copy(playbackSpeed = speed)
+                                        exoPlayer.setPlaybackSpeed(speed)
                                     }
                                 )
 
                             VideoTools.FILTERS -> {
                                 Column {
-                                    SectionTitle("Фильтры")
+                                    SectionTitle(stringResource(R.string.tab_filters))
                                     VideoFilterRow(
                                         previewBitmap = currentFrameBitmap,
                                         currentFilterName = settings.filterName,
@@ -763,7 +781,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     CircularProgressIndicator(color = iOSBlue, strokeWidth = 3.dp)
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "Экспорт видео...",
+                        stringResource(R.string.exporting_video),
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium
                     )

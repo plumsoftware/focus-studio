@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.ColorPickerRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.FocusSlider
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
@@ -37,7 +39,7 @@ fun ShapeControlPanel(
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (selectedShape == null) {
-            SectionTitle("Добавить фигуру")
+            SectionTitle(stringResource(R.string.shape_add))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ShapeType.entries.forEach { type ->
                     ShapeSelectItem(type) {
@@ -46,7 +48,6 @@ fun ShapeControlPanel(
                 }
             }
         } else {
-            // Заголовок с кнопкой УДАЛЕНИЯ (iOS Style)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -56,10 +57,18 @@ fun ShapeControlPanel(
                     onUpdate(settings.copy(shapes = settings.shapes.filter { it.id != selectedShapeId }))
                     onClose()
                 }) {
-                    Icon(Icons.Default.Delete, "Delete", tint = Color.Red.copy(0.8f))
+                    Icon(
+                        Icons.Default.Delete,
+                        stringResource(R.string.cd_delete),
+                        tint = Color.Red.copy(0.8f)
+                    )
                 }
 
-                Text("Настройка", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    stringResource(R.string.shape_settings),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium
+                )
 
                 IconButton(onClick = onClose) {
                     Icon(Icons.Default.Close, null, tint = Color.White)
@@ -67,18 +76,29 @@ fun ShapeControlPanel(
             }
 
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                FocusSlider("Поворот", selectedShape.rotation) {
+                FocusSlider(
+                    label = stringResource(R.string.param_rotation),
+                    value = selectedShape.rotation
+                ) {
                     val updated = selectedShape.copy(rotation = it * 1.8f)
                     onUpdate(settings.copy(shapes = settings.shapes.map { s -> if (s.id == updated.id) updated else s }))
                 }
 
-                Text("Заливка", style = MaterialTheme.typography.labelSmall, color = AppleGray)
+                Text(
+                    stringResource(R.string.label_fill),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppleGray
+                )
                 ColorPickerRow(selectedShape.fillColor) { color ->
                     val updated = selectedShape.copy(fillColor = color)
                     onUpdate(settings.copy(shapes = settings.shapes.map { s -> if (s.id == updated.id) updated else s }))
                 }
 
-                Text("Контур", style = MaterialTheme.typography.labelSmall, color = AppleGray)
+                Text(
+                    stringResource(R.string.label_stroke),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppleGray
+                )
                 ColorPickerRow(selectedShape.strokeColor) { color ->
                     val updated = selectedShape.copy(strokeColor = color)
                     onUpdate(settings.copy(shapes = settings.shapes.map { s -> if (s.id == updated.id) updated else s }))

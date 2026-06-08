@@ -22,7 +22,9 @@ object FocusDesign {
     val editorPanelWidth = 320.dp
     val topBarHeight = 64.dp
     val floatingToolbarHeight = 54.dp
-    val filterItemSize = 80.dp
+    val filterItemSize = 100.dp
+    val featureIconSize = 20.dp
+    val recentThumbSize = 80.dp
     val sliderHeight = 44.dp
 
     // Скругления

@@ -28,11 +28,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Crop
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Crop
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.ui.res.stringResource
+import ru.plumsoftware.focusstudio.R
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -158,7 +160,10 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         }
     }
 
-    val fileName = remember(photoUri) {
+    val unknownFileName = stringResource(R.string.file_unknown_image)
+    val defaultFileName = stringResource(R.string.file_image_default)
+
+    val fileName = remember(photoUri, unknownFileName, defaultFileName) {
         photoUri?.let { uri ->
             try {
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -166,13 +171,13 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     if (nameIndex != -1 && cursor.moveToFirst()) {
                         cursor.getString(nameIndex)
                     } else {
-                        uri.lastPathSegment ?: "image.png"
+                        uri.lastPathSegment ?: defaultFileName
                     }
-                } ?: uri.lastPathSegment ?: "image.png"
+                } ?: uri.lastPathSegment ?: defaultFileName
             } catch (e: Exception) {
-                uri.lastPathSegment ?: "image.png"
+                uri.lastPathSegment ?: defaultFileName
             }
-        } ?: "Unknown.png"
+        } ?: unknownFileName
     }
 
     fun updateLiveSettings(newSettings: PhotoSettings) {
@@ -225,7 +230,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Undo,
-                            contentDescription = "Undo",
+                            contentDescription = stringResource(R.string.cd_undo),
                             tint = if (currentIndex > 0) Color.White else Color.White.copy(alpha = 0.3f),
                             modifier = Modifier.size(20.dp)
                         )
@@ -245,7 +250,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Redo,
-                            contentDescription = "Redo",
+                            contentDescription = stringResource(R.string.cd_redo),
                             tint = if (currentIndex < history.size - 1) Color.White else Color.White.copy(
                                 alpha = 0.3f
                             ),
@@ -387,28 +392,28 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         EditorToolItem(
-                            Icons.Default.Tune,
-                            "Adjust",
+                            Icons.Outlined.Tune,
+                            stringResource(R.string.tab_adjust),
                             activeTool == EditorTools.ADJUST
                         ) { activeTool = EditorTools.ADJUST }
                         EditorToolItem(
-                            Icons.Default.AutoAwesome,
-                            "Filter",
+                            Icons.Outlined.AutoAwesome,
+                            stringResource(R.string.tab_filter),
                             activeTool == EditorTools.FILTERS
                         ) { activeTool = EditorTools.FILTERS }
                         EditorToolItem(
-                            Icons.Default.Crop,
-                            "Crop",
+                            Icons.Outlined.Crop,
+                            stringResource(R.string.tab_crop),
                             activeTool == EditorTools.CROP
                         ) { activeTool = EditorTools.CROP }
                         EditorToolItem(
-                            Icons.Default.TextFields,
-                            "Text",
+                            Icons.Outlined.TextFields,
+                            stringResource(R.string.tab_text),
                             activeTool == EditorTools.TEXT
                         ) { activeTool = EditorTools.TEXT }
                         EditorToolItem(
-                            Icons.Default.Category,
-                            "Shapes",
+                            Icons.Outlined.Category,
+                            stringResource(R.string.tab_shapes),
                             activeTool == EditorTools.SHAPES
                         ) { activeTool = EditorTools.SHAPES }
                     }
@@ -419,7 +424,10 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     ) {
                         when (activeTool) {
                             EditorTools.ADJUST -> AdjustPanel(currentSettings) { updateSettings(it) }
-                            EditorTools.FILTERS -> FilterRow(photoUri) { m, n ->
+                            EditorTools.FILTERS -> FilterRow(
+                                photoUri = photoUri,
+                                selectedFilterName = currentSettings.filterName
+                            ) { m, n ->
                                 updateSettings(
                                     currentSettings.copy(selectedFilter = m, filterName = n)
                                 )

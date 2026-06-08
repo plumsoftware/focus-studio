@@ -21,7 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
@@ -33,13 +35,21 @@ fun TransitionSelector(
     onSelect: (TransitionType) -> Unit
 ) {
     Column {
-        SectionTitle("Выберите переход")
+        SectionTitle(stringResource(R.string.transition_select))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            TransitionItem("Нет", TransitionType.NONE, currentType == TransitionType.NONE) { onSelect(TransitionType.NONE) }
-            TransitionItem("Fade", TransitionType.FADE, currentType == TransitionType.FADE) { onSelect(TransitionType.FADE) }
+            TransitionItem(
+                stringResource(R.string.transition_none),
+                TransitionType.NONE,
+                currentType == TransitionType.NONE
+            ) { onSelect(TransitionType.NONE) }
+            TransitionItem(
+                stringResource(R.string.transition_fade),
+                TransitionType.FADE,
+                currentType == TransitionType.FADE
+            ) { onSelect(TransitionType.FADE) }
         }
     }
 }
@@ -57,9 +67,15 @@ fun TransitionItem(label: String, type: TransitionType, isSelected: Boolean, onC
         ) {
             Icon(
                 if (type == TransitionType.FADE) Icons.Default.BlurOn else Icons.Default.Close,
-                null, tint = if (isSelected) Color.White else AppleGray
+                null,
+                tint = if (isSelected) Color.White else AppleGray
             )
         }
-        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }

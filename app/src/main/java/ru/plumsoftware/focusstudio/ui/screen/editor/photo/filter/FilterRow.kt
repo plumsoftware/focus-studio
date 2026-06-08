@@ -24,26 +24,33 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
+import ru.plumsoftware.focusstudio.ui.theme.AccentBlue
+import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 
 @Composable
-fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) {
+fun FilterRow(
+    photoUri: Uri?,
+    selectedFilterName: String = "None",
+    onFilterSelected: (ColorMatrix?, String) -> Unit
+) {
     val filters = listOf(
-        Triple("Оригинал", FilterMatrices.None, "None"),
-        Triple("Vivid", FilterMatrices.Vivid, "Vivid"),
-        Triple("Sepia", FilterMatrices.Sepia, "Sepia"),
-        Triple("Polaroid", FilterMatrices.Polaroid, "Polaroid"),
-        Triple("Cinema", FilterMatrices.Kodachrome, "Kodachrome"),
-        Triple("Dramatic", FilterMatrices.DramaticBW, "DramaticBW"),
-        Triple("Night", FilterMatrices.NightVision, "NightVision"),
-        Triple("Invert", FilterMatrices.Invert, "Invert"),
-        Triple("Noir", FilterMatrices.Noir, "Noir"),
-        Triple("Vintage", FilterMatrices.Vintage, "Vintage"),
-        Triple("Cold", FilterMatrices.Cold, "Cold")
+        Triple(stringResource(R.string.filter_original), FilterMatrices.None, "None"),
+        Triple(stringResource(R.string.filter_vivid), FilterMatrices.Vivid, "Vivid"),
+        Triple(stringResource(R.string.filter_sepia), FilterMatrices.Sepia, "Sepia"),
+        Triple(stringResource(R.string.filter_polaroid), FilterMatrices.Polaroid, "Polaroid"),
+        Triple(stringResource(R.string.filter_cinema), FilterMatrices.Kodachrome, "Kodachrome"),
+        Triple(stringResource(R.string.filter_dramatic), FilterMatrices.DramaticBW, "DramaticBW"),
+        Triple(stringResource(R.string.filter_night), FilterMatrices.NightVision, "NightVision"),
+        Triple(stringResource(R.string.filter_invert), FilterMatrices.Invert, "Invert"),
+        Triple(stringResource(R.string.filter_noir), FilterMatrices.Noir, "Noir"),
+        Triple(stringResource(R.string.filter_vintage), FilterMatrices.Vintage, "Vintage"),
+        Triple(stringResource(R.string.filter_cold), FilterMatrices.Cold, "Cold")
     )
 
     LazyRow(
@@ -51,6 +58,7 @@ fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) 
         contentPadding = PaddingValues(horizontal = FocusDesign.paddingSmall)
     ) {
         items(filters) { (label, matrix, name) ->
+            val isSelected = selectedFilterName == name
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.clickable { onFilterSelected(matrix, name) }
@@ -60,12 +68,11 @@ fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) 
                         .size(FocusDesign.filterItemSize)
                         .clip(RoundedCornerShape(FocusDesign.cornerMedium))
                         .border(
-                            1.dp,
-                            Color.White.copy(0.1f),
-                            RoundedCornerShape(FocusDesign.cornerMedium)
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) AccentBlue else Color.White.copy(0.1f),
+                            shape = RoundedCornerShape(FocusDesign.cornerMedium)
                         )
                 ) {
-                    // ПРЕВЬЮ ФИЛЬТРА
                     AsyncImage(
                         model = photoUri,
                         contentDescription = null,
@@ -77,7 +84,8 @@ fun FilterRow(photoUri: Uri?, onFilterSelected: (ColorMatrix?, String) -> Unit) 
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
+                    color = if (isSelected) Color.White else AppleGray,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }

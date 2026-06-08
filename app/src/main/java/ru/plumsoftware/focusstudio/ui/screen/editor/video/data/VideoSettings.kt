@@ -20,5 +20,7 @@ data class VideoSettings(
     val audioFileName: String? = null,
 
     val shapes: List<ShapeElement> = emptyList(),
-    val texts: List<TextElement> = emptyList()
+    val texts: List<TextElement> = emptyList(),
+
+    val playbackSpeed: Float = 1f
 )

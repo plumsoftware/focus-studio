@@ -21,18 +21,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 
 @Composable
 fun AspectRatioRow(onRatioSelected: (Float?) -> Unit) {
     val ratios = listOf(
-        "Свободно" to null,
-        "1:1" to 1f,
-        "3:4" to 3f / 4f,
-        "4:3" to 4f / 3f,
-        "16:9" to 16f / 9f,
-        "9:16" to 9f / 16f
+        stringResource(R.string.crop_free) to null,
+        stringResource(R.string.ratio_1_1) to 1f,
+        stringResource(R.string.ratio_3_4) to 3f / 4f,
+        stringResource(R.string.ratio_4_3) to 4f / 3f,
+        stringResource(R.string.ratio_16_9) to 16f / 9f,
+        stringResource(R.string.ratio_9_16) to 9f / 16f
     )
 
     LazyRow(
@@ -53,7 +55,6 @@ fun AspectRatioRow(onRatioSelected: (Float?) -> Unit) {
                         .padding(4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Иконка-визуализация соотношения
                     Box(
                         modifier = Modifier
                             .fillMaxSize(if (value != null) if (value > 1f) 0.5f else 0.8f else 1f)

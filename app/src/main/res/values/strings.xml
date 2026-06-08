@@ -10,14 +10,48 @@
     <string name="badge_60fps">60 FPS</string>
     <string name="badge_logc">LOG-C</string>
 
-    <!-- Фото редактор -->
+    <string name="loading_ads">Загрузка рекламы</string>
+    <string name="loading_import">Импорт файла…</string>
+    <string name="exporting_video">Экспорт видео…</string>
+
+    <string name="recent_title">Недавние</string>
+    <string name="recent_all">Все →</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_language">Язык интерфейса</string>
+    <string name="settings_language_value">Русский</string>
+    <string name="settings_version">Версия</string>
+
+    <!-- Вкладки — фото -->
+    <string name="tab_adjust">Настройка</string>
+    <string name="tab_filter">Фильтр</string>
+    <string name="tab_crop">Кадрирование</string>
+    <string name="tab_text">Текст</string>
+    <string name="tab_shapes">Фигуры</string>
+
+    <!-- Вкладки — видео -->
+    <string name="tab_timeline">Хронология</string>
+    <string name="tab_clips">Клипы</string>
+    <string name="tab_filters">Фильтры</string>
+    <string name="tab_music">Музыка</string>
+
     <string name="btn_cancel">Отмена</string>
     <string name="btn_export">Экспорт</string>
     <string name="btn_reset_all">Сбросить все</string>
+    <string name="btn_trim">Обрезать</string>
+    <string name="btn_ok">OK</string>
+    <string name="btn_crop_apply">Кадрировать</string>
 
     <string name="label_settings">Настройки</string>
     <string name="label_transformation">Трансформация</string>
     <string name="label_filters_grade">Фильтры грейд</string>
+    <string name="label_timeline">Хронология</string>
+    <string name="label_crop">Кадрировать</string>
+    <string name="label_font">Шрифт</string>
+    <string name="label_color">Цвет</string>
+    <string name="label_fill">Заливка</string>
+    <string name="label_stroke">Контур</string>
+    <string name="label_resolution">Разрешение</string>
 
     <string name="param_brightness">Яркость</string>
     <string name="param_contrast">Контраст</string>
@@ -28,16 +62,83 @@
     <string name="param_skew_y">Искажение Y</string>
     <string name="param_scale_x">Масштаб X</string>
     <string name="param_scale_y">Масштаб Y</string>
+    <string name="param_rotation">Поворот</string>
+    <string name="param_size">Размер</string>
+    <string name="param_volume">Громкость</string>
 
+    <string name="filter_original">Оригинал</string>
     <string name="filter_none">Нет</string>
     <string name="filter_vintage">Винтаж</string>
     <string name="filter_noir">Нуар</string>
     <string name="filter_cinema">Кино</string>
     <string name="filter_warm">Тёплый</string>
     <string name="filter_cold">Холодный</string>
-    <string name="filter_vivid">Vivid</string>
-    <string name="label_crop">Кадрировать</string>
+    <string name="filter_vivid">Яркий</string>
+    <string name="filter_sepia">Сепия</string>
+    <string name="filter_polaroid">Полароид</string>
+    <string name="filter_dramatic">Драматичный</string>
+    <string name="filter_night">Ночь</string>
+    <string name="filter_invert">Инверсия</string>
 
-    <string name="label_timeline">Timeline</string>
-    <string name="btn_trim">Обрезать</string>
+    <string name="clip_speed">Скорость</string>
+    <string name="clip_speed_value">%1$s×</string>
+    <string name="clips_project">Клипы проекта</string>
+    <string name="clip_number">Клип %1$d</string>
+
+    <string name="text_new_default">Новый текст</string>
+    <string name="text_add">Добавить текст</string>
+    <string name="text_edit_title">Настроить текст</string>
+
+    <string name="shape_add">Добавить фигуру</string>
+    <string name="shape_settings">Настройка</string>
+    <string name="shape_settings_full">Настройка фигуры</string>
+
+    <string name="crop_free">Свободно</string>
+    <string name="ratio_1_1">1:1</string>
+    <string name="ratio_3_4">3:4</string>
+    <string name="ratio_4_3">4:3</string>
+    <string name="ratio_16_9">16:9</string>
+    <string name="ratio_9_16">9:16</string>
+
+    <string name="transition_select">Выберите переход</string>
+    <string name="transition_none">Нет</string>
+    <string name="transition_fade">Затухание</string>
+
+    <string name="music_title">Музыка</string>
+    <string name="music_add">Добавить аудио</string>
+    <string name="music_track_default">Аудио трек</string>
+    <string name="music_file_default">музыка.mp3</string>
+    <string name="music_replace">Заменить трек</string>
+
+    <string name="permission_title">Доступ к медиа</string>
+    <string name="permission_message">Чтобы редактировать фото и видео, приложению нужен доступ к вашей галерее.</string>
+    <string name="permission_go_settings">Настройки</string>
+
+    <string name="export_done_title">Готово!</string>
+    <string name="export_done_message">Ваше изображение успешно сохранено в галерею.</string>
+    <string name="export_error_title">Ошибка экспорта</string>
+    <string name="export_error_message">Не удалось экспортировать видео. На устройстве возникла системная ошибка обработки видеопотока.</string>
+
+    <string name="cd_undo">Отменить</string>
+    <string name="cd_redo">Повторить</string>
+    <string name="cd_delete">Удалить</string>
+
+    <string name="file_unknown_image">Неизвестно.png</string>
+    <string name="file_unknown_video">Неизвестно.mp4</string>
+    <string name="file_image_default">изображение.png</string>
+    <string name="file_video_default">видео.mp4</string>
+
+    <!-- Шрифты (отображение) -->
+    <string name="font_default">По умолчанию</string>
+    <string name="font_serif">Serif</string>
+    <string name="font_sans_serif">Sans Serif</string>
+    <string name="font_monospace">Monospace</string>
+    <string name="font_sf_pro">SF Pro</string>
+    <string name="font_google_sans">Google Sans</string>
+    <string name="font_passions_conflict">Passions Conflict</string>
+    <string name="font_ruthless_sketch">Ruthless Sketch</string>
+    <string name="font_montserrat_underline">Montserrat Underline</string>
+    <string name="font_old_soviet">Old Soviet</string>
+    <string name="font_aa_stetica">AA Stetica</string>
+    <string name="font_accidental_presidency">Accidental Presidency</string>
 </resources>
