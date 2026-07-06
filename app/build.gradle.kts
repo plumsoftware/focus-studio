@@ -14,12 +14,12 @@ android {
         applicationId = "ru.plumsoftware.focusstudio"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.0.8"
+        versionCode = 10
+        versionName = "1.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("int", "PLATFORM", "1")
+        buildConfigField("int", "PLATFORM", "2")
 
         renderscriptTargetApi = 23
         renderscriptSupportModeEnabled = true
