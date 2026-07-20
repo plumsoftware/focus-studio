@@ -1,6 +1,7 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,9 +17,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.ShapeType
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 
 @Composable
 fun ShapeSelectItem(type: ShapeType, onClick: () -> Unit) {
@@ -29,7 +32,11 @@ fun ShapeSelectItem(type: ShapeType, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .background(Color.White.copy(0.1f), CircleShape),
+                .clip(CircleShape)
+                // Было: плоский белый оверлей 10% альфы.
+                // Стало: тонкая градиентная рамка, вписывается в общий акцент экрана.
+                .background(Color.White.copy(0.06f))
+                .border(1.dp, GradientAccent, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -34,7 +35,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.focusstudio.ui.theme.AccentBlue
+import ru.plumsoftware.focusstudio.ui.theme.AccentEnd
 import ru.plumsoftware.focusstudio.ui.theme.AccentGreen
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
@@ -73,7 +76,8 @@ fun FocusSlider(
             Text(
                 text = displayValue,
                 style = MaterialTheme.typography.labelSmall,
-                color = iOSBlue,
+                // Было: iOSBlue
+                color = AccentStart,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -151,32 +155,24 @@ private fun CenterZeroSlider(
                 val trackTop = centerY - trackHeight / 2f
                 val zeroX = zeroFraction * size.width
 
+                // Было: серый фон трека + отдельная заливка от нуля до ползунка.
+                // Стало: весь трек сразу закрашен градиентом от края до края,
+                // как на промо — ползунок просто едет по готовой ленте,
+                // само значение никак не влияет на закраску, только на позицию thumb.
+                val trackGradient = Brush.linearGradient(
+                    colors = listOf(AccentStart, AccentEnd),
+                    start = Offset(0f, centerY),
+                    end = Offset(size.width, centerY)
+                )
+
                 drawRoundRect(
-                    color = Color.DarkGray.copy(alpha = 0.3f),
+                    brush = trackGradient,
                     topLeft = Offset(0f, trackTop),
                     size = Size(size.width, trackHeight),
                     cornerRadius = CornerRadius(trackHeight / 2f)
                 )
 
-                if (value < zero) {
-                    val leftStart = thumbX
-                    val leftWidth = (zeroX - thumbX).coerceAtLeast(0f)
-                    drawRoundRect(
-                        color = AccentBlue,
-                        topLeft = Offset(leftStart, trackTop),
-                        size = Size(leftWidth, trackHeight),
-                        cornerRadius = CornerRadius(trackHeight / 2f)
-                    )
-                } else if (value > zero) {
-                    val rightWidth = (thumbX - zeroX).coerceAtLeast(0f)
-                    drawRoundRect(
-                        color = AccentGreen,
-                        topLeft = Offset(zeroX, trackTop),
-                        size = Size(rightWidth, trackHeight),
-                        cornerRadius = CornerRadius(trackHeight / 2f)
-                    )
-                }
-
+                // Метка нуля поверх градиента
                 drawRoundRect(
                     color = Color.White.copy(alpha = 0.6f),
                     topLeft = Offset(zeroX - tickWidth / 2f, centerY - tickHeight / 2f),
@@ -193,3 +189,4 @@ private fun CenterZeroSlider(
         }
     }
 }
+

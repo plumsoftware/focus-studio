@@ -1,8 +1,10 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -17,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -30,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -62,7 +66,6 @@ fun AdvancedCropOverlay(
                         x > rect.right - threshold -> {
                             val newRight = (rect.right + dx).coerceIn(rect.left + 0.1f, 1f)
                             if (ratio != null) {
-                                // Если есть пресет, меняем высоту пропорционально
                                 val newHeight = (newRight - rect.left) / ratio
                                 rect.copy(right = newRight, bottom = (rect.top + newHeight).coerceAtMost(1f))
                             } else {
@@ -122,14 +125,13 @@ fun AdvancedCropOverlay(
             drawRoundRect(hColor, Offset(r.right - hThick/2, r.center.y - hLen/2), Size(hThick, hLen), CornerRadius(hThick))
         }
 
-        // Кнопка подтверждения
-        Surface(
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 28.dp)
-                .clickable { onCropApply(rect) },
-            color = iOSBlue,
-            shape = CircleShape
+                .clip(CircleShape)
+                .background(GradientAccent)
+                .clickable { onCropApply(rect) }
         ) {
             Text(
                 stringResource(R.string.btn_crop_apply).uppercase(),

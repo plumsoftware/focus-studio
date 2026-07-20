@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -70,9 +71,11 @@ import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.copyUriToCache
 import ru.plumsoftware.focusstudio.data.RecentProject
 import ru.plumsoftware.focusstudio.data.RecentProjectsHelper
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.Routes
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 import ru.plumsoftware.focusstudio.ui.theme.iOSPurple
@@ -128,7 +131,10 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = FocusDesign.paddingMedium, vertical = FocusDesign.paddingSmall),
+                    .padding(
+                        horizontal = FocusDesign.paddingMedium,
+                        vertical = FocusDesign.paddingSmall
+                    ),
                 horizontalArrangement = Arrangement.End
             ) {
                 IconButton(onClick = { showSettings = true }) {
@@ -150,16 +156,20 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
             ) {
                 Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
 
+                // Было: border/color = iOSBlue (плоский синий).
+                // Стало: тот же фирменный градиент, что и в редакторе — единый акцент бренда.
                 Surface(
                     shape = MaterialTheme.shapes.extraLarge,
                     color = Color.Transparent,
-                    border = BorderStroke(FocusDesign.badgeStrokeWidth, iOSBlue),
+                    border = BorderStroke(FocusDesign.badgeStrokeWidth, GradientAccent),
                     modifier = Modifier.padding(bottom = FocusDesign.paddingMedium)
                 ) {
                     Text(
                         text = stringResource(R.string.prof_studio).uppercase(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = iOSBlue,
+                        // Текст внутри бейджа градиентом не покрасить через color,
+                        // поэтому берём насыщенный AccentStart — читается как часть той же палитры.
+                        color = AccentStart,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
@@ -193,7 +203,12 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                         title = stringResource(R.string.video_title),
                         desc = stringResource(R.string.video_desc),
                         icon = Icons.Default.Videocam,
-                        iconColor = iOSBlue,
+                        iconBrush = Brush.linearGradient(
+                            listOf(
+                                Color(0xFF4A6CF7),
+                                Color(0xFF6C5CE7)
+                            )
+                        ),
                         onClick = { videoPickerLauncher.launch("video/*") }
                     )
                     SelectionCard(
@@ -201,7 +216,12 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                         title = stringResource(R.string.photo_title),
                         desc = stringResource(R.string.photo_desc),
                         icon = Icons.Default.Image,
-                        iconColor = iOSPurple,
+                        iconBrush = Brush.linearGradient(
+                            listOf(
+                                Color(0xFF9B59F6),
+                                Color(0xFFFF5A8A)
+                            )
+                        ),
                         onClick = { photoPickerLauncher.launch("image/*") }
                     )
                 }
@@ -311,7 +331,8 @@ private fun RecentProjectsSection(
             Text(
                 text = stringResource(R.string.recent_all),
                 fontSize = 13.sp,
-                color = iOSBlue,
+                // Было: iOSBlue
+                color = AccentStart,
                 modifier = Modifier.clickable(onClick = onViewAll)
             )
         }
@@ -342,6 +363,64 @@ private fun RecentProjectsSection(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SelectionCard(
+    modifier: Modifier,
+    title: String,
+    desc: String,
+    icon: ImageVector,
+    iconBrush: Brush,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .height(FocusDesign.cardHeight)
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        color = DarkSurface
+    ) {
+        Column(
+            modifier = Modifier.padding(FocusDesign.paddingMedium),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Было: Surface(color = iconColor) — плоская заливка.
+            // Стало: градиентная иконка-бокс, тон в тон с фирменным акцентом промо.
+            Box(
+                modifier = Modifier
+                    .size(FocusDesign.iconBoxSize)
+                    .clip(RoundedCornerShape(FocusDesign.cornerMedium))
+                    .background(iconBrush),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.padding(14.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(FocusDesign.paddingLarge))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White
+            )
+
+            Spacer(modifier = Modifier.height(FocusDesign.paddingSmall))
+
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = AppleGray
+            )
         }
     }
 }

@@ -47,6 +47,8 @@ import kotlinx.coroutines.withContext
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoClip
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.formatTimeSmart
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -127,7 +129,7 @@ fun VideoTimeline(
                                 .offset { IntOffset(clipStartOff.toInt(), 16.dp.toPx().toInt()) }
                                 .width(with(density) { clipWidth.toDp() })
                                 .height(32.dp)
-                                .background(if (index % 2 == 0) iOSBlue.copy(0.05f) else Color.Transparent)
+                                .background(if (index % 2 == 0) AccentStart.copy(0.06f) else Color.Transparent)
                                 .border(0.5.dp, Color.White.copy(0.15f))
                         )
                         accumulatedMs += clipDur
@@ -139,8 +141,8 @@ fun VideoTimeline(
                             .offset { IntOffset(startPx.toInt(), 16.dp.run { toPx().toInt() }) }
                             .width(with(density) { regionWidth.toDp() })
                             .height(32.dp)
-                            .background(iOSBlue.copy(0.15f))
-                            .border(2.dp, iOSBlue, RoundedCornerShape(4.dp))
+                            .background(GradientAccent.let { AccentStart.copy(0.18f) }) // мягкая заливка под градиентной рамкой
+                            .border(2.dp, GradientAccent, RoundedCornerShape(4.dp))
                     )
 
                     Handle(offsetPx = startPx) { deltaX ->

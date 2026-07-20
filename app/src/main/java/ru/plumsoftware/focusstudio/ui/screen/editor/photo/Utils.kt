@@ -20,13 +20,18 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import java.io.OutputStream
 import androidx.core.graphics.withSave
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.ShapeType
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.core.graphics.createBitmap
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
+import ru.plumsoftware.focusstudio.ui.theme.AccentEnd
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 
 // 1. Расширение для перемножения (конкатенации) матриц 4x5, так как в Compose нет timesAssign
 fun ColorMatrix.concat(second: ColorMatrix) {
@@ -197,9 +202,11 @@ fun saveEditedImage(
 
     // --- ШАГ 4: Отрисовка ТЕКСТА ---
     settings.texts.forEach { text ->
+        val isChip = text.backgroundStyle !is TextBackgroundStyle.None
+
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = text.color.toArgb()
-            // ИСПРАВЛЕНИЕ: Умножаем на screenDensity
+            color = if (isChip) android.graphics.Color.WHITE else text.color.toArgb()
+            isFakeBoldText = isChip
             // Так как в UI используется .sp, реальный размер в пикселях = fontSize * density
             textSize = text.fontSize * screenDensity * scaleFactor
             typeface = getAndroidTypeface(context, text.fontFamily)
@@ -223,6 +230,39 @@ fun saveEditedImage(
 
         canvas.withSave {
             translate(posX, posY)
+
+            // Чип-подложка под текстом — цвет/градиент зависит от выбранного backgroundStyle
+            if (isChip) {
+                val paddingH = 14.dp.toPxRaw(context) * scaleFactor
+                val paddingV = 6.dp.toPxRaw(context) * scaleFactor
+
+                val chipRect = RectF(
+                    -paddingH,
+                    -paddingV,
+                    staticLayout.width.toFloat() + paddingH,
+                    staticLayout.height.toFloat() + paddingV
+                )
+
+                val chipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    when (val style = text.backgroundStyle) {
+                        is TextBackgroundStyle.Solid -> {
+                            color = style.color.toArgb()
+                        }
+                        is TextBackgroundStyle.Gradient -> {
+                            shader = LinearGradient(
+                                chipRect.left, 0f, chipRect.right, 0f,
+                                style.start.toArgb(), style.end.toArgb(),
+                                Shader.TileMode.CLAMP
+                            )
+                        }
+                        is TextBackgroundStyle.None -> { /* сюда не попадём, isChip уже false */ }
+                    }
+                }
+
+                val cornerRadius = chipRect.height() / 2f
+                drawRoundRect(chipRect, cornerRadius, cornerRadius, chipPaint)
+            }
+
             staticLayout.draw(this)
         }
     }
@@ -248,6 +288,10 @@ fun saveEditedImage(
     processedBitmap.recycle()
     onComplete(uri)
 }
+
+// Вспомогательная функция для перевода dp в реальные экранные px
+private fun Dp.toPxRaw(context: Context): Float =
+    this.value * context.resources.displayMetrics.density
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ПУТИ ФИГУР ---
 fun createAndroidShapePath(type: ShapeType, w: Float, h: Float): android.graphics.Path {

@@ -188,8 +188,11 @@ fun exportVideo(
 
     // РИСУЕМ ТЕКСТ
     settings.texts.forEach { text ->
+        val isChip = text.backgroundStyle !is ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle.None
+
         val textPaint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = text.color.toArgb()
+            color = if (isChip) android.graphics.Color.WHITE else text.color.toArgb()
+            isFakeBoldText = isChip
             textSize = text.fontSize * density * scale
             typeface = getAndroidTypeface(context, text.fontFamily)
         }
@@ -205,6 +208,38 @@ fun exportVideo(
             .obtain(text.text, 0, text.text.length, textPaint, maxWidth)
             .setIncludePad(false)
             .build()
+
+        // НОВОЕ: чип-подложка под текстом
+        if (isChip) {
+            val paddingH = 14f * density * scale
+            val paddingV = 6f * density * scale
+
+            val chipRect = android.graphics.RectF(
+                -paddingH,
+                -paddingV,
+                staticLayout.width.toFloat() + paddingH,
+                staticLayout.height.toFloat() + paddingV
+            )
+
+            val chipPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                when (val style = text.backgroundStyle) {
+                    is ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle.Solid -> {
+                        color = style.color.toArgb()
+                    }
+                    is ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle.Gradient -> {
+                        shader = android.graphics.LinearGradient(
+                            chipRect.left, 0f, chipRect.right, 0f,
+                            style.start.toArgb(), style.end.toArgb(),
+                            android.graphics.Shader.TileMode.CLAMP
+                        )
+                    }
+                    else -> {}
+                }
+            }
+
+            val cornerRadius = chipRect.height() / 2f
+            canvas.drawRoundRect(chipRect, cornerRadius, cornerRadius, chipPaint)
+        }
 
         staticLayout.draw(canvas)
         canvas.restore()

@@ -33,9 +33,10 @@ import androidx.compose.ui.unit.sp
 import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
-import ru.plumsoftware.focusstudio.ui.theme.AccentBlue
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 
 private val speedOptions = listOf(0.25f, 0.5f, 1f, 1.5f, 2f)
 
@@ -84,14 +85,16 @@ fun ClipsPanel(
             item {
                 Surface(
                     onClick = onAddClick,
-                    modifier = Modifier.size(70.dp),
+                    modifier = Modifier
+                        .size(70.dp)
+                        .border(1.dp, GradientAccent, RoundedCornerShape(12.dp)),
                     shape = RoundedCornerShape(12.dp),
                     color = Color.White.copy(0.05f)
                 ) {
                     Icon(
                         Icons.Default.Add,
                         null,
-                        tint = AccentBlue,
+                        tint = AccentStart,
                         modifier = Modifier.padding(20.dp)
                     )
                 }
@@ -112,7 +115,7 @@ fun ClipsPanel(
                 Text(
                     text = stringResource(R.string.clip_speed_value, formatSpeed(settings.playbackSpeed)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentBlue,
+                    color = AccentStart,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -125,10 +128,10 @@ fun ClipsPanel(
                     Surface(
                         onClick = { onSpeedChange(speed) },
                         shape = RoundedCornerShape(8.dp),
-                        color = if (selected) AccentBlue.copy(alpha = 0.2f) else Color.White.copy(0.05f),
+                        color = if (selected) AccentStart.copy(alpha = 0.15f) else Color.White.copy(0.05f),
                         border = BorderStroke(
                             width = if (selected) 1.5.dp else 1.dp,
-                            color = if (selected) AccentBlue else Color.White.copy(0.1f)
+                            color = if (selected) AccentStart else Color.White.copy(0.1f)
                         ),
                         modifier = Modifier.padding(2.dp)
                     ) {

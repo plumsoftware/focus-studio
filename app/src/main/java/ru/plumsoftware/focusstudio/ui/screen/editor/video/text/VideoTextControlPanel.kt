@@ -1,93 +1,44 @@
-package ru.plumsoftware.focusstudio.ui.screen.editor.photo.text
+package ru.plumsoftware.focusstudio.ui.screen.editor.video.text
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import java.util.UUID
 import ru.plumsoftware.focusstudio.R
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.FocusSlider
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextElement
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.parseColor
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.toHex
-import ru.plumsoftware.focusstudio.ui.theme.AppleGray
-import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.text.TextEditPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
-import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
-import java.util.UUID
 
-data class FontOption(val key: String, @StringRes val labelRes: Int)
-
-val fontOptions = listOf(
-    FontOption("Default", R.string.font_default),
-    FontOption("Serif", R.string.font_serif),
-    FontOption("Sans serif", R.string.font_sans_serif),
-    FontOption("Monospace", R.string.font_monospace),
-    FontOption("SF Pro", R.string.font_sf_pro),
-    FontOption("Google Sans", R.string.font_google_sans),
-    FontOption("Passions Conflict", R.string.font_passions_conflict),
-    FontOption("Ruthless Sketch", R.string.font_ruthless_sketch),
-    FontOption("Montserrat Underline", R.string.font_montserrat_underline),
-    FontOption("Old Soviet", R.string.font_old_soviet),
-    FontOption("AA Stetica", R.string.font_aa_stetica),
-    FontOption("Accidental Presidency", R.string.font_accidental_presidency)
-)
-
+// Полный аналог TextControlPanel (фото), только оперирует VideoSettings.
+// Внутри переиспользует тот же TextEditPanel — он не завязан на фото/видео,
+// работает с любым TextElement, поэтому вкладки Шрифты/Цвет/Фон одинаковые.
 @Composable
-fun TextControlPanel(
-    settings: PhotoSettings,
+fun VideoTextControlPanel(
+    settings: VideoSettings,
     selectedTextId: String?,
-    onUpdate: (PhotoSettings) -> Unit,
+    onUpdate: (VideoSettings) -> Unit,
     onSelectText: (String) -> Unit,
     onClose: () -> Unit
 ) {
@@ -96,7 +47,6 @@ fun TextControlPanel(
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (selectedText == null) {
-            // ВОТ ОНА — кнопка "Добавить текст"
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Surface(
                     onClick = {
@@ -108,6 +58,7 @@ fun TextControlPanel(
                             color = Color.White,
                             fontSize = 40f,
                             fontFamily = "Default"
+                            // backgroundStyle по умолчанию — градиентный чип, как в фото-редакторе
                         )
                         onUpdate(settings.copy(texts = settings.texts + newText))
                         onSelectText(newId)
@@ -127,7 +78,6 @@ fun TextControlPanel(
                 }
             }
         } else {
-            // Если текст ВЫБРАН (selectedTextId != null) — вместо кнопки показывается TextEditPanel
             TextEditPanel(
                 selectedText = selectedText,
                 onUpdate = { updatedElement ->

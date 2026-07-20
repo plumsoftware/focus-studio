@@ -71,7 +71,7 @@ fun VideoShapeControlPanel(
                 }
                 Text(
                     stringResource(R.string.label_fill),
-                    color = Color.Gray,
+                    color = ru.plumsoftware.focusstudio.ui.theme.AppleGray,
                     style = MaterialTheme.typography.labelSmall
                 )
                 ColorPickerRow(selectedShape.fillColor) { color ->

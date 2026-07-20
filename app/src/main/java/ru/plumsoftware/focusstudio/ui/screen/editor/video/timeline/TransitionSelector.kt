@@ -27,6 +27,7 @@ import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.TransitionType
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -57,11 +58,14 @@ fun TransitionSelector(
 @Composable
 fun TransitionItem(label: String, type: TransitionType, isSelected: Boolean, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+        val modif = if (isSelected) Modifier.background(GradientAccent) else Modifier.background(Color.White.copy(0.1f))
+
         Box(
             modifier = Modifier
                 .size(70.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (isSelected) iOSBlue else Color.White.copy(0.1f))
+                .then(modif)
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {

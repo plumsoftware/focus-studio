@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
-import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 
 @Composable
 fun ColorPickerRow(
@@ -49,7 +49,7 @@ fun ColorPickerRow(
                     .background(if (color == Color.Transparent) Color.White.copy(0.1f) else color)
                     .border(
                         width = if (selectedColor == color) 2.dp else 1.dp,
-                        color = if (selectedColor == color) iOSBlue else Color.White.copy(alpha = 0.2f),
+                        color = if (selectedColor == color) AccentStart else Color.White.copy(alpha = 0.2f),
                         shape = CircleShape
                     )
                     .clickable { onColorSelected(color) },

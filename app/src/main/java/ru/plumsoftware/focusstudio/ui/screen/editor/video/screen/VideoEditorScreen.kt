@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -69,6 +70,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -92,6 +94,7 @@ import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.IosExportErrorDialog
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
@@ -110,9 +113,12 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.video.filter.VideoFilterRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.getCombinedMatrixVideo
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.music.MusicPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.shape.VideoTimeline
+import ru.plumsoftware.focusstudio.ui.screen.editor.video.text.VideoTextControlPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.timeline.TrimButton
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.trimClipsLogic
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
+import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 import kotlin.math.roundToInt
 
@@ -539,32 +545,51 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                         var localOffset by remember(textItem.id) { mutableStateOf(textItem.position) }
                         LaunchedEffect(textItem.position) { localOffset = textItem.position }
 
-                        Text(
-                            text = textItem.text,
-                            color = textItem.color,
-                            fontSize = textItem.fontSize.sp,
-                            fontFamily = getFontFamily(textItem.fontFamily),
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        localOffset.x.roundToInt(),
-                                        localOffset.y.roundToInt()
-                                    )
-                                }
-                                .pointerInput(textItem.id) {
-                                    detectDragGestures(
-                                        onDrag = { change, drag -> change.consume(); localOffset += drag },
-                                        onDragEnd = {
-                                            settings = settings.copy(texts = settings.texts.map {
-                                                if (it.id == textItem.id) textState.copy(position = localOffset) else it
-                                            })
-                                        }
-                                    )
-                                }
-                                .clickable {
-                                    selectedTextId = textItem.id; activeTool = VideoTools.TEXT
-                                }
-                        )
+                        val textModifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    localOffset.x.roundToInt(),
+                                    localOffset.y.roundToInt()
+                                )
+                            }
+                            .pointerInput(textItem.id) {
+                                detectDragGestures(
+                                    onDrag = { change, drag -> change.consume(); localOffset += drag },
+                                    onDragEnd = {
+                                        settings = settings.copy(texts = settings.texts.map {
+                                            if (it.id == textItem.id) textState.copy(position = localOffset) else it
+                                        })
+                                    }
+                                )
+                            }
+                            .clickable {
+                                selectedTextId = textItem.id; activeTool = VideoTools.TEXT
+                            }
+
+                        // Было: голый Text без фона.
+                        // Стало: если у текста выбран фон (Solid/Gradient) — рисуем чип, как в фото-редакторе.
+                        val bgModifier = when (val style = textItem.backgroundStyle) {
+                            is TextBackgroundStyle.None -> Modifier
+                            is TextBackgroundStyle.Solid -> Modifier
+                                .clip(RoundedCornerShape(FocusDesign.cornerMedium))
+                                .background(style.color)
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                            is TextBackgroundStyle.Gradient -> Modifier
+                                .clip(RoundedCornerShape(FocusDesign.cornerMedium))
+                                .background(Brush.linearGradient(listOf(style.start, style.end)))
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        }
+
+                        Box(modifier = textModifier.then(bgModifier)) {
+                            Text(
+                                text = textItem.text,
+                                color = if (textItem.backgroundStyle is TextBackgroundStyle.None) textItem.color else Color.White,
+                                fontWeight = if (textItem.backgroundStyle is TextBackgroundStyle.None) FontWeight.Normal else FontWeight.Bold,
+                                fontSize = textItem.fontSize.sp,
+                                fontFamily = getFontFamily(textItem.fontFamily),
+                                modifier = if (textItem.backgroundStyle is TextBackgroundStyle.None) Modifier.padding(4.dp) else Modifier
+                            )
+                        }
                     }
                 }
 
@@ -749,11 +774,11 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             }
 
                             VideoTools.TEXT -> {
-                                TextControlPanel(
-                                    settings = PhotoSettingsAdapter.toPhoto(settings),
+                                VideoTextControlPanel (
+                                    settings = settings,
                                     selectedTextId = selectedTextId,
-                                    onUpdate = { photoSettings ->
-                                        settings = PhotoSettingsAdapter.toVideo(photoSettings, settings)
+                                    onUpdate = { newSettings ->
+                                        settings = newSettings
                                     },
                                     onSelectText = { id ->
                                         selectedTextId = id
@@ -778,7 +803,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = iOSBlue, strokeWidth = 3.dp)
+                    CircularProgressIndicator(color = AccentStart, strokeWidth = 3.dp)
                     Spacer(Modifier.height(16.dp))
                     Text(
                         stringResource(R.string.exporting_video),

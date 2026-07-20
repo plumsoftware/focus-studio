@@ -141,4 +141,5 @@
     <string name="font_old_soviet">Old Soviet</string>
     <string name="font_aa_stetica">AA Stetica</string>
     <string name="font_accidental_presidency">Accidental Presidency</string>
+    <string name="label_background">Фон</string>
 </resources>

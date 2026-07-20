@@ -1,6 +1,8 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,14 +17,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.plumsoftware.focusstudio.R
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -30,25 +35,23 @@ fun EditorTopBar(fileName: String, onCancel: () -> Unit, onExport: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding() // Отступ под системный статус-бар
-            .height(FocusDesign.topBarHeight) // Стандарт 64.dp
+            .statusBarsPadding()
+            .height(FocusDesign.topBarHeight)
             .padding(horizontal = FocusDesign.paddingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ЛЕВО: Отмена (Занимает только свою ширину)
         Text(
             text = stringResource(R.string.btn_cancel),
-            color = iOSBlue,
+            color = AccentStart,
             modifier = Modifier
                 .wrapContentWidth()
                 .clickable { onCancel() },
             style = MaterialTheme.typography.bodyLarge
         )
 
-        // ЦЕНТР: Название файла (Занимает всё свободное пространство)
         Column(
             modifier = Modifier
-                .weight(1f) // Ключевое исправление: забирает только свободное место
+                .weight(1f)
                 .padding(horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -64,16 +67,17 @@ fun EditorTopBar(fileName: String, onCancel: () -> Unit, onExport: () -> Unit) {
                 color = AppleGray,
                 fontSize = 10.sp,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis // Если имя слишком длинное, будет "имя_файла..."
+                overflow = TextOverflow.Ellipsis
             )
         }
 
-        // ПРАВО: Экспорт (Занимает только свою ширину)
-        Surface(
-            color = iOSBlue,
-            shape = CircleShape,
+        // Было: Surface(color = iOSBlue) — плоский синий.
+        // Стало: градиентный фон через background(Brush), как на промо.
+        Box(
             modifier = Modifier
                 .wrapContentWidth()
+                .clip(CircleShape)
+                .background(GradientAccent)
                 .clickable { onExport() }
         ) {
             Text(

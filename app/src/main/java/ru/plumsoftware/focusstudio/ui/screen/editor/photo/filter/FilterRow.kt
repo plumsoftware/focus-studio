@@ -32,6 +32,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.FilterMatrices
 import ru.plumsoftware.focusstudio.ui.theme.AccentBlue
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 
 @Composable
 fun FilterRow(
@@ -67,10 +68,12 @@ fun FilterRow(
                     modifier = Modifier
                         .size(FocusDesign.filterItemSize)
                         .clip(RoundedCornerShape(FocusDesign.cornerMedium))
-                        .border(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) AccentBlue else Color.White.copy(0.1f),
-                            shape = RoundedCornerShape(FocusDesign.cornerMedium)
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(2.dp, GradientAccent, RoundedCornerShape(FocusDesign.cornerMedium))
+                            } else {
+                                Modifier.border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(FocusDesign.cornerMedium))
+                            }
                         )
                 ) {
                     AsyncImage(

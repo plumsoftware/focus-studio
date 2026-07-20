@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -62,6 +63,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,6 +82,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.AdvancedCropOverl
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.EditorTools
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.CropPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.filter.FilterRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getCombinedMatrix
@@ -88,8 +91,10 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.saveEditedImage
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeComponent
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.shape.ShapeControlPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.text.TextControlPanel
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.text.TextEditPanel
 import ru.plumsoftware.focusstudio.ui.theme.DarkSurface
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -294,53 +299,61 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
 
                     // Отрисовка текста
                     currentSettings.texts.forEach { textItem ->
-                        // rememberUpdatedState гарантирует, что настройки (цвет, размер) не "протухнут" во время захвата жеста
                         val currentTextState by rememberUpdatedState(textItem)
-
-                        // Локальное состояние позиции — ключ к плавности 60 FPS
                         var localOffset by remember(textItem.id) { mutableStateOf(textItem.position) }
 
-                        // Синхронизация: если нажали Undo/Redo, обновляем локальную позицию
                         LaunchedEffect(textItem.position) {
                             localOffset = textItem.position
                         }
 
-                        Text(
-                            text = textItem.text,
-                            color = textItem.color,
-                            fontSize = textItem.fontSize.sp,
-                            fontFamily = getFontFamily(textItem.fontFamily),
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        localOffset.x.roundToInt(),
-                                        localOffset.y.roundToInt()
-                                    )
-                                }
-                                .pointerInput(textItem.id) {
-                                    detectDragGestures(
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            localOffset += dragAmount
-                                        },
-                                        onDragEnd = {
-                                            val finalUpdate =
-                                                currentTextState.copy(position = localOffset)
-                                            updateSettings(
-                                                currentSettings.copy(
-                                                    texts = currentSettings.texts.map {
-                                                        if (it.id == textItem.id) finalUpdate else it
-                                                    }
-                                                ))
-                                        }
-                                    )
-                                }
-                                .clickable {
-                                    selectedTextId = textItem.id
-                                    activeTool = EditorTools.TEXT
-                                }
-                                .padding(4.dp)
-                        )
+                        val textModifier = Modifier
+                            .offset {
+                                IntOffset(localOffset.x.roundToInt(), localOffset.y.roundToInt())
+                            }
+                            .pointerInput(textItem.id) {
+                                detectDragGestures(
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        localOffset += dragAmount
+                                    },
+                                    onDragEnd = {
+                                        val finalUpdate = currentTextState.copy(position = localOffset)
+                                        updateSettings(
+                                            currentSettings.copy(
+                                                texts = currentSettings.texts.map {
+                                                    if (it.id == textItem.id) finalUpdate else it
+                                                }
+                                            ))
+                                    }
+                                )
+                            }
+                            .clickable {
+                                selectedTextId = textItem.id
+                                activeTool = EditorTools.TEXT
+                            }
+
+                        val bgModifier = when (val style = textItem.backgroundStyle) {
+                            is TextBackgroundStyle.None -> Modifier
+                            is TextBackgroundStyle.Solid -> Modifier
+                                .clip(RoundedCornerShape(FocusDesign.cornerMedium))
+                                .background(style.color)
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                            is TextBackgroundStyle.Gradient -> Modifier
+                                .clip(RoundedCornerShape(FocusDesign.cornerMedium))
+                                .background(Brush.linearGradient(listOf(style.start, style.end)))
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        }
+
+                        Box(modifier = textModifier.then(bgModifier)) {
+                            Text(
+                                text = textItem.text,
+                                color = if (textItem.backgroundStyle is TextBackgroundStyle.None) textItem.color else Color.White,
+                                fontWeight = if (textItem.backgroundStyle is TextBackgroundStyle.None) FontWeight.Normal else FontWeight.Bold,
+                                fontSize = textItem.fontSize.sp,
+                                fontFamily = getFontFamily(textItem.fontFamily),
+                                modifier = if (textItem.backgroundStyle is TextBackgroundStyle.None) Modifier.padding(4.dp) else Modifier
+                            )
+                        }
                     }
 
                     currentSettings.shapes.forEach { shape ->

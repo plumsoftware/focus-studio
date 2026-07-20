@@ -1,5 +1,7 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,8 +21,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 import ru.plumsoftware.focusstudio.ui.theme.FocusDesign
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
 
 @Composable
@@ -34,15 +38,23 @@ fun EditorToolItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clip(RoundedCornerShape(FocusDesign.cornerExtraSmall))
+            // Было: только tint у иконки/текста.
+            // Стало: рамка + лёгкая подложка вокруг активного таба, как в промо.
+            .then(
+                if (isSelected) {
+                    Modifier
+                        .background(AccentStart.copy(alpha = 0.12f))
+                        .border(1.dp, GradientAccent, RoundedCornerShape(FocusDesign.cornerExtraSmall))
+                } else Modifier
+            )
             .clickable { onClick() }
             .padding(vertical = FocusDesign.paddingSmall)
-            .width(72.dp) // Фиксированная ширина для равномерного распределения
+            .width(72.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            // Используем iOSBlue для активного состояния и AppleGray для неактивного
-            tint = if (isSelected) iOSBlue else AppleGray,
+            tint = if (isSelected) AccentStart else AppleGray,
             modifier = Modifier.size(24.dp)
         )
 
@@ -50,9 +62,8 @@ fun EditorToolItem(
 
         Text(
             text = label,
-            // Используем вашу типографику SF-Pro
             style = MaterialTheme.typography.labelSmall,
-            color = if (isSelected) iOSBlue else AppleGray,
+            color = if (isSelected) AccentStart else AppleGray,
             fontSize = 10.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
         )

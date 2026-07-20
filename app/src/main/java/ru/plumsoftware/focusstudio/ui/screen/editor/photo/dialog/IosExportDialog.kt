@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import ru.plumsoftware.focusstudio.R
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
 
 @Composable
 fun IosExportDialog(
@@ -65,10 +66,11 @@ fun IosExportDialog(
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
+                    // Было: Color(0xFF0A84FF) — рассинхрон с общим акцентом.
                     Text(
                         text = stringResource(R.string.btn_ok),
-                        color = Color(0xFF0A84FF),
-                        fontWeight = FontWeight.Normal
+                        color = AccentStart,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

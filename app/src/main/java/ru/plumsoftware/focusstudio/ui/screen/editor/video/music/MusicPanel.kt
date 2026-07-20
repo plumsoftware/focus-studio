@@ -1,6 +1,7 @@
 package ru.plumsoftware.focusstudio.ui.screen.editor.video.music
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +34,8 @@ import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.FocusSlider
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.SectionTitle
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.data.VideoSettings
-import ru.plumsoftware.focusstudio.ui.theme.iOSBlue
+import ru.plumsoftware.focusstudio.ui.theme.AccentStart
+import ru.plumsoftware.focusstudio.ui.theme.GradientAccent
 
 @Composable
 fun MusicPanel(
@@ -46,20 +48,23 @@ fun MusicPanel(
         SectionTitle(stringResource(R.string.music_title))
 
         if (settings.audioUri == null) {
+            // Было: плоский фон + iOSBlue иконка/текст.
+            // Стало: тонкая градиентная рамка — как в кнопках добавления в фото-редакторе.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(100.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White.copy(alpha = 0.05f))
+                    .border(1.dp, GradientAccent, RoundedCornerShape(16.dp))
                     .clickable { onAddMusic() },
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Add, null, tint = iOSBlue, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Default.Add, null, tint = AccentStart, modifier = Modifier.size(32.dp))
                     Text(
                         stringResource(R.string.music_add),
-                        color = iOSBlue,
+                        color = AccentStart,
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
@@ -73,7 +78,7 @@ fun MusicPanel(
                     .padding(16.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.MusicNote, null, tint = iOSBlue)
+                    Icon(Icons.Default.MusicNote, null, tint = AccentStart)
                     Spacer(Modifier.width(12.dp))
                     Text(
                         text = settings.audioFileName ?: stringResource(R.string.music_track_default),
@@ -100,7 +105,7 @@ fun MusicPanel(
                 onClick = onAddMusic,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
-                Text(stringResource(R.string.music_replace), color = iOSBlue)
+                Text(stringResource(R.string.music_replace), color = AccentStart)
             }
         }
     }
