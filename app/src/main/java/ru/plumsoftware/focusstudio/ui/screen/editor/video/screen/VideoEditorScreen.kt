@@ -611,13 +611,13 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
             Surface(
                 Modifier.fillMaxWidth(),
                 color = DarkSurface,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
             ) {
                 Column {
                     LazyRow(
                         Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp, horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         item {
