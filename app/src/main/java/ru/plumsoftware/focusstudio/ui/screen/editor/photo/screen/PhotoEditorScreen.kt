@@ -395,13 +395,13 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = DarkSurface,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
             ) {
                 Column {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp, horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         EditorToolItem(

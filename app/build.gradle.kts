@@ -7,15 +7,15 @@ plugins {
 android {
     namespace = "ru.plumsoftware.focusstudio"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "ru.plumsoftware.focusstudio"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 11
-        versionName = "1.1.0"
+        targetSdk = 37
+        versionCode = 12
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
