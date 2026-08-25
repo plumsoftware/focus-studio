@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -128,16 +130,30 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
                         horizontal = FocusDesign.paddingMedium,
                         vertical = FocusDesign.paddingSmall
-                    ),
-                horizontalArrangement = Arrangement.End
+                    )
             ) {
-                IconButton(onClick = { showSettings = true }) {
+                // Ссылка на официальный сайт — по центру, на одном уровне с настройками.
+                WebsiteFooter(
+                    modifier = Modifier.align(Alignment.Center),
+                    onClick = {
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            context.getString(R.string.website_url).toUri()
+                        )
+                        context.startActivity(intent)
+                    }
+                )
+
+                IconButton(
+                    onClick = { showSettings = true },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = stringResource(R.string.settings_title),
@@ -278,6 +294,37 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
         if (showSettings) {
             SettingsBottomSheet(onDismiss = { showSettings = false })
         }
+    }
+}
+
+@Composable
+private fun WebsiteFooter(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(FocusDesign.cornerFull))
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = FocusDesign.paddingSmall,
+                vertical = FocusDesign.paddingExtraSmall
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Language,
+            contentDescription = stringResource(R.string.website_label),
+            tint = AccentStart,
+            modifier = Modifier.size(FocusDesign.featureIconSize)
+        )
+        Spacer(modifier = Modifier.width(FocusDesign.paddingExtraSmall))
+        Text(
+            text = stringResource(R.string.website_display),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = AccentStart
+        )
     }
 }
 

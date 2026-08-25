@@ -3,31 +3,44 @@
     <string name="prof_studio">PROFESSIONAL STUDIO</string>
     <string name="subtitle">Professional photo and video editor. Studio quality right on your phone.</string>
     <string name="video_title">VIDEO</string>
-    <string name="video_desc">Edit films, add transitions and effects</string>
+    <string name="video_desc">Edit clips, add transitions and effects</string>
     <string name="photo_title">PHOTO</string>
-    <string name="photo_desc">Enhance photos with studio-grade filters</string>
+    <string name="photo_desc">Enhance photos with studio filters</string>
     <string name="badge_4k">4K RAW</string>
     <string name="badge_60fps">60 FPS</string>
     <string name="badge_logc">LOG-C</string>
 
     <string name="loading_ads">Loading ad</string>
+    <string name="loading_ads_progress">Loading ad…</string>
     <string name="loading_import">Importing file…</string>
+
+    <string name="ad_consent_title">Support the app</string>
+    <string name="ad_consent_message">Watch a short ad to continue.</string>
+    <string name="ad_consent_watch">Watch</string>
+    <string name="ad_consent_skip">Skip</string>
+    <string name="cd_close">Close</string>
     <string name="exporting_video">Exporting video…</string>
 
     <string name="recent_title">Recent</string>
     <string name="recent_all">All →</string>
+
+    <string name="website_label">Official website</string>
+    <string name="website_display">prof-focus-studio.ru</string>
+    <string name="website_url">https://prof-focus-studio.ru/</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_language">Interface language</string>
     <string name="settings_language_value">English</string>
     <string name="settings_version">Version</string>
 
+    <!-- Tabs — photo -->
     <string name="tab_adjust">Adjust</string>
     <string name="tab_filter">Filter</string>
     <string name="tab_crop">Crop</string>
     <string name="tab_text">Text</string>
     <string name="tab_shapes">Shapes</string>
 
+    <!-- Tabs — video -->
     <string name="tab_timeline">Timeline</string>
     <string name="tab_clips">Clips</string>
     <string name="tab_filters">Filters</string>
@@ -42,14 +55,14 @@
 
     <string name="label_settings">Settings</string>
     <string name="label_transformation">Transform</string>
-    <string name="label_filters_grade">Filter grade</string>
+    <string name="label_filters_grade">Color grade</string>
     <string name="label_timeline">Timeline</string>
     <string name="label_crop">Crop</string>
     <string name="label_font">Font</string>
     <string name="label_color">Color</string>
     <string name="label_fill">Fill</string>
     <string name="label_stroke">Stroke</string>
-    <string name="label_resolution">Aspect ratio</string>
+    <string name="label_resolution">Resolution</string>
 
     <string name="param_brightness">Brightness</string>
     <string name="param_contrast">Contrast</string>
@@ -98,7 +111,7 @@
     <string name="ratio_16_9">16:9</string>
     <string name="ratio_9_16">9:16</string>
 
-    <string name="transition_select">Choose transition</string>
+    <string name="transition_select">Select transition</string>
     <string name="transition_none">None</string>
     <string name="transition_fade">Fade</string>
 
@@ -113,19 +126,20 @@
     <string name="permission_go_settings">Settings</string>
 
     <string name="export_done_title">Done!</string>
-    <string name="export_done_message">Your image was saved to the gallery.</string>
+    <string name="export_done_message">Your image was successfully saved to the gallery.</string>
     <string name="export_error_title">Export error</string>
-    <string name="export_error_message">Could not export video. A system video processing error occurred on this device.</string>
+    <string name="export_error_message">Failed to export the video. A system error occurred while processing the video stream on the device.</string>
 
     <string name="cd_undo">Undo</string>
     <string name="cd_redo">Redo</string>
     <string name="cd_delete">Delete</string>
 
-    <string name="file_unknown_image">Unknown.png</string>
-    <string name="file_unknown_video">Unknown.mp4</string>
+    <string name="file_unknown_image">unknown.png</string>
+    <string name="file_unknown_video">unknown.mp4</string>
     <string name="file_image_default">image.png</string>
     <string name="file_video_default">video.mp4</string>
 
+    <!-- Fonts (display) -->
     <string name="font_default">Default</string>
     <string name="font_serif">Serif</string>
     <string name="font_sans_serif">Sans Serif</string>
@@ -138,5 +152,5 @@
     <string name="font_old_soviet">Old Soviet</string>
     <string name="font_aa_stetica">AA Stetica</string>
     <string name="font_accidental_presidency">Accidental Presidency</string>
-    <string name="label_background">Фон</string>
+    <string name="label_background">Background</string>
 </resources>

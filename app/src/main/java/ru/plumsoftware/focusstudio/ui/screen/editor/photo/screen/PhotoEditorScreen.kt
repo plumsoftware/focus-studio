@@ -83,6 +83,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.EditorTools
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.CropPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.AdConsentDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.filter.FilterRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getCombinedMatrix
@@ -109,6 +110,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var selectedTextId by remember { mutableStateOf<String?>(null) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
+    var showAdConsent by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -197,7 +199,8 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
                         isExporting = false
                         if (uri != null) {
-                            showAdAndThenDialog()
+                            // Перед рекламой показываем окно-согласие с крестиком.
+                            showAdConsent = true
                         }
                     }
                 }
@@ -468,6 +471,21 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         }
                     }
                 }
+            }
+
+            if (showAdConsent) {
+                AdConsentDialog(
+                    onSkip = {
+                        // Крестик / «Пропустить» — рекламу не показываем, сразу к «Готово».
+                        showAdConsent = false
+                        showExportDialog = true
+                    },
+                    onWatch = {
+                        // 3 секунды прошли — показываем рекламу, затем диалог «Готово».
+                        showAdConsent = false
+                        showAdAndThenDialog()
+                    }
+                )
             }
 
             if (showExportDialog) {

@@ -11,11 +11,22 @@
     <string name="badge_logc">LOG-C</string>
 
     <string name="loading_ads">Загрузка рекламы</string>
+    <string name="loading_ads_progress">Загрузка рекламы…</string>
     <string name="loading_import">Импорт файла…</string>
+
+    <string name="ad_consent_title">Поддержите приложение</string>
+    <string name="ad_consent_message">Посмотрите короткую рекламу, чтобы продолжить.</string>
+    <string name="ad_consent_watch">Смотреть</string>
+    <string name="ad_consent_skip">Пропустить</string>
+    <string name="cd_close">Закрыть</string>
     <string name="exporting_video">Экспорт видео…</string>
 
     <string name="recent_title">Недавние</string>
     <string name="recent_all">Все →</string>
+
+    <string name="website_label">Официальный сайт</string>
+    <string name="website_display">prof-focus-studio.ru</string>
+    <string name="website_url">https://prof-focus-studio.ru/</string>
 
     <string name="settings_title">Настройки</string>
     <string name="settings_language">Язык интерфейса</string>

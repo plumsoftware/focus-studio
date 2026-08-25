@@ -95,6 +95,7 @@ import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.ui.screen.IosExportErrorDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.AdConsentDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
@@ -137,6 +138,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var showExportErrorDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
+    var showAdConsent by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
     // ID выбранных объектов
@@ -458,7 +460,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     onResult = { uri ->
                         isExporting = false
                         if (uri != null) {
-                            showAdAndThenDialog()
+                            // Перед рекламой показываем окно-согласие с крестиком.
+                            showAdConsent = true
                         } else {
                             showExportErrorDialog = true
                         }
@@ -812,6 +815,21 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     )
                 }
             }
+        }
+
+        if (showAdConsent) {
+            AdConsentDialog(
+                onSkip = {
+                    // Крестик / «Пропустить» — рекламу не показываем, сразу к «Готово».
+                    showAdConsent = false
+                    showExportDialog = true
+                },
+                onWatch = {
+                    // 3 секунды прошли — показываем рекламу, затем диалог «Готово».
+                    showAdConsent = false
+                    showAdAndThenDialog()
+                }
+            )
         }
 
         if (showExportErrorDialog) {
