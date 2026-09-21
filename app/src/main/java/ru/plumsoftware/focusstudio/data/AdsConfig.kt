@@ -5,11 +5,19 @@ import ru.plumsoftware.focusstudio.BuildConfig
 object AdsConfig {
 
     /**
-    1 - RuStore
-    2 - Google Play
-    3 - Huawei App Gallery
+     * Боевые рекламные ID задаются в product flavor (dimension "store")
+     * в app/build.gradle.kts:
+     *   - rustore    → PLATFORM 1 (RuStore)
+     *   - googleplay → PLATFORM 2 (Google Play)
+     *   - huawei     → PLATFORM 3 (Huawei App Gallery)
+     *
+     * В debug-сборке любого флейвора используются демо-идентификаторы Yandex,
+     * в release — боевые ID выбранного магазина.
      */
 
-    val OPEN_ADS_ID = if (BuildConfig.DEBUG) "demo-appopenad-yandex" else if (BuildConfig.PLATFORM == 1) "R-M-19268030-1" else if (BuildConfig.PLATFORM == 3) "R-M-19275668-1" else "demo-appopenad-yandex"
-    val INTERSTITIAL_ADS_ID = if (BuildConfig.DEBUG) "demo-interstitial-yandex" else if (BuildConfig.PLATFORM == 1) "R-M-19268030-2" else if (BuildConfig.PLATFORM == 3) "R-M-19275668-2" else "demo-interstitial-yandex"
+    val OPEN_ADS_ID =
+        if (BuildConfig.DEBUG) "demo-appopenad-yandex" else BuildConfig.OPEN_ADS_ID
+
+    val INTERSTITIAL_ADS_ID =
+        if (BuildConfig.DEBUG) "demo-interstitial-yandex" else BuildConfig.INTERSTITIAL_ADS_ID
 }

@@ -19,8 +19,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("int", "PLATFORM", "1")
-
         renderscriptTargetApi = 23
         renderscriptSupportModeEnabled = true
     }
@@ -32,6 +30,32 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    // Магазин приложений выбирается через product flavor.
+    // PLATFORM: 1 = RuStore, 2 = Google Play, 3 = Huawei App Gallery.
+    // Каждый флейвор задаёт свои боевые рекламные ID Yandex. В debug-сборке
+    // (любой флейвор) AdsConfig подменяет их на демо-идентификаторы.
+    flavorDimensions += "store"
+    productFlavors {
+        create("rustore") {
+            dimension = "store"
+            buildConfigField("int", "PLATFORM", "1")
+            buildConfigField("String", "OPEN_ADS_ID", "\"R-M-19268030-1\"")
+            buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"R-M-19268030-2\"")
+        }
+        create("googleplay") {
+            dimension = "store"
+            buildConfigField("int", "PLATFORM", "2")
+            buildConfigField("String", "OPEN_ADS_ID", "\"demo-appopenad-yandex\"")
+            buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"demo-interstitial-yandex\"")
+        }
+        create("huawei") {
+            dimension = "store"
+            buildConfigField("int", "PLATFORM", "3")
+            buildConfigField("String", "OPEN_ADS_ID", "\"R-M-19275668-1\"")
+            buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"R-M-19275668-2\"")
         }
     }
     compileOptions {
