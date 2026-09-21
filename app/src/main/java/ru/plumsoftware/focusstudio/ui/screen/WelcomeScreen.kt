@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Palette
@@ -242,6 +243,12 @@ fun WelcomeScreen(navController: NavController, isAdsLoading: Boolean) {
                     )
                 }
 
+                Spacer(modifier = Modifier.height(FocusDesign.paddingMedium))
+
+                CollageCard(
+                    onClick = { navController.navigate(Routes.COLLAGE_EDITOR) }
+                )
+
                 if (recentProjects.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(FocusDesign.paddingLarge))
                     RecentProjectsSection(
@@ -409,6 +416,57 @@ private fun RecentProjectsSection(
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollageCard(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        color = DarkSurface
+    ) {
+        Row(
+            modifier = Modifier.padding(FocusDesign.paddingMedium),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(FocusDesign.iconBoxSize)
+                    .clip(RoundedCornerShape(FocusDesign.cornerMedium))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF6C5CE7), Color(0xFFFF5A8A))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.GridView,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(FocusDesign.paddingMedium))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.collage_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(FocusDesign.paddingExtraSmall))
+                Text(
+                    text = stringResource(R.string.collage_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppleGray
+                )
             }
         }
     }

@@ -153,4 +153,22 @@
     <string name="font_aa_stetica">AA Stetica</string>
     <string name="font_accidental_presidency">Accidental Presidency</string>
     <string name="label_background">Фон</string>
+
+    <!-- Коллаж -->
+    <string name="collage_title">КОЛЛАЖ</string>
+    <string name="collage_desc">Соедините до четырёх фото в одном кадре</string>
+    <string name="collage_next">Далее</string>
+    <string name="collage_tab_layout">Макет</string>
+    <string name="collage_tab_style">Стиль</string>
+    <string name="collage_photos">Кол-во фото</string>
+    <string name="collage_layout">Раскладка</string>
+    <string name="collage_aspect">Формат</string>
+    <string name="collage_gap">Отступ</string>
+    <string name="collage_corner">Скругление</string>
+    <string name="collage_empty_hint">Добавить фото</string>
+    <string name="collage_min_hint">Добавьте минимум 2 фото</string>
+    <string name="collage_building">Собираем коллаж…</string>
+    <string name="collage_hint_gesture">Двумя пальцами — масштаб, перетаскивание — сдвиг</string>
+    <string name="cd_collage_remove">Убрать фото</string>
+    <string name="cd_collage_replace">Заменить фото</string>
 </resources>

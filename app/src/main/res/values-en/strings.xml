@@ -153,4 +153,22 @@
     <string name="font_aa_stetica">AA Stetica</string>
     <string name="font_accidental_presidency">Accidental Presidency</string>
     <string name="label_background">Background</string>
+
+    <!-- Collage -->
+    <string name="collage_title">COLLAGE</string>
+    <string name="collage_desc">Combine up to four photos in one frame</string>
+    <string name="collage_next">Next</string>
+    <string name="collage_tab_layout">Layout</string>
+    <string name="collage_tab_style">Style</string>
+    <string name="collage_photos">Photos</string>
+    <string name="collage_layout">Layout</string>
+    <string name="collage_aspect">Format</string>
+    <string name="collage_gap">Spacing</string>
+    <string name="collage_corner">Corners</string>
+    <string name="collage_empty_hint">Add photo</string>
+    <string name="collage_min_hint">Add at least 2 photos</string>
+    <string name="collage_building">Building collage…</string>
+    <string name="collage_hint_gesture">Pinch to zoom, drag to reposition</string>
+    <string name="cd_collage_remove">Remove photo</string>
+    <string name="cd_collage_replace">Replace photo</string>
 </resources>

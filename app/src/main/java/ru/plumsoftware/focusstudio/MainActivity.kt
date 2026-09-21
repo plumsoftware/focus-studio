@@ -43,6 +43,7 @@ import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.data.AppPrefs
 import ru.plumsoftware.focusstudio.ui.screen.IosPermissionDialog
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.collage.CollageEditorScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.screen.VideoEditorScreen
 
@@ -162,6 +163,20 @@ class MainActivity : ComponentActivity() {
                             VideoEditorScreen(
                                 videoUri = uri,
                                 onCancel = { navController.popBackStack() })
+                        }
+
+                        composable(Routes.COLLAGE_EDITOR) {
+                            CollageEditorScreen(
+                                onCancel = { navController.popBackStack() },
+                                onOpenInEditor = { collageUri ->
+                                    // Готовый коллаж — обычное изображение. Открываем его в
+                                    // существующем фоторедакторе (тот же путь сохранения).
+                                    val encodedUri = Uri.encode(collageUri.toString())
+                                    navController.navigate("${Routes.PHOTO_EDITOR}/$encodedUri") {
+                                        popUpTo(Routes.COLLAGE_EDITOR) { inclusive = true }
+                                    }
+                                }
+                            )
                         }
                     }
 
