@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import kotlin.math.abs
 import androidx.compose.ui.Alignment
@@ -116,6 +117,12 @@ private fun CenterZeroSlider(
     val zero = 0f
     val rangeSpan = valueRange.endInclusive - valueRange.start
 
+    // ВАЖНО: pointerInput не перезапускается при рекомпозиции, поэтому без
+    // rememberUpdatedState жест навсегда запоминал самую первую лямбду onValueChange
+    // (а она — устаревший снимок настроек). Из-за этого при движении одного
+    // ползунка остальные откатывались к старым значениям.
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+
     BoxWithConstraints(modifier = modifier) {
         val trackWidth = constraints.maxWidth.toFloat()
 
@@ -136,14 +143,14 @@ private fun CenterZeroSlider(
                 .pointerInput(valueRange, trackWidth) {
                     detectTapGestures { offset ->
                         val x = offset.x.coerceIn(0f, trackWidth)
-                        onValueChange(fractionToValue(x / trackWidth))
+                        currentOnValueChange(fractionToValue(x / trackWidth))
                     }
                 }
                 .pointerInput(valueRange, trackWidth) {
                     detectDragGestures { change, _ ->
                         change.consume()
                         val x = change.position.x.coerceIn(0f, trackWidth)
-                        onValueChange(fractionToValue(x / trackWidth))
+                        currentOnValueChange(fractionToValue(x / trackWidth))
                     }
                 }
         ) {

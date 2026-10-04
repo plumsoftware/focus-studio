@@ -14,8 +14,8 @@ android {
         applicationId = "ru.plumsoftware.focusstudio"
         minSdk = 24
         targetSdk = 37
-        versionCode = 13
-        versionName = "1.1.2"
+        versionCode = 14
+        versionName = "1.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -44,18 +44,21 @@ android {
             buildConfigField("int", "PLATFORM", "1")
             buildConfigField("String", "OPEN_ADS_ID", "\"R-M-19268030-1\"")
             buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"R-M-19268030-2\"")
+            buildConfigField("String", "NATIVE_ADS_ID", "\"R-M-19268030-3\"")
         }
         create("googleplay") {
             dimension = "store"
             buildConfigField("int", "PLATFORM", "2")
             buildConfigField("String", "OPEN_ADS_ID", "\"demo-appopenad-yandex\"")
             buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"demo-interstitial-yandex\"")
+            buildConfigField("String", "NATIVE_ADS_ID", "\"demo-native-content-yandex\"")
         }
         create("huawei") {
             dimension = "store"
             buildConfigField("int", "PLATFORM", "3")
             buildConfigField("String", "OPEN_ADS_ID", "\"R-M-19275668-1\"")
             buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"R-M-19275668-2\"")
+            buildConfigField("String", "NATIVE_ADS_ID", "\"R-M-19275668-3\"")
         }
     }
     compileOptions {
@@ -108,5 +111,5 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
 
     //Yandex Ads
-    implementation("com.yandex.android:mobileads:8.0.0")
+    implementation("com.yandex.android:mobileads:8.5.0")
 }

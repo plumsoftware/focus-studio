@@ -18,7 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import ru.plumsoftware.focusstudio.R
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.ColorPickerRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.FocusSlider
@@ -32,10 +36,13 @@ import ru.plumsoftware.focusstudio.ui.theme.AppleGray
 fun ShapeControlPanel(
     settings: PhotoSettings,
     selectedShapeId: String?,
+    canvasSize: IntSize,
     onUpdate: (PhotoSettings) -> Unit,
+    onShapeAdded: (String) -> Unit = {},
     onClose: () -> Unit
 ) {
     val selectedShape = settings.shapes.find { it.id == selectedShapeId }
+    val density = LocalDensity.current.density
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (selectedShape == null) {
@@ -43,7 +50,9 @@ fun ShapeControlPanel(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 ShapeType.entries.forEach { type ->
                     ShapeSelectItem(type) {
-                        onUpdate(settings.copy(shapes = settings.shapes + ShapeElement(type = type)))
+                        val newShape = newCenteredShape(type, canvasSize, density)
+                        onUpdate(settings.copy(shapes = settings.shapes + newShape))
+                        onShapeAdded(newShape.id)
                     }
                 }
             }
@@ -106,4 +115,27 @@ fun ShapeControlPanel(
             }
         }
     }
+}
+
+
+/**
+ * Новая фигура ровно по центру области редактирования.
+ * position — левый верхний угол в пикселях, size — в dp, поэтому для центрирования
+ * размер переводится в пиксели. Фигура не больше 40% меньшей стороны области.
+ */
+private fun newCenteredShape(type: ShapeType, canvasSize: IntSize, density: Float): ShapeElement {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return ShapeElement(type = type)
+
+    val maxSideDp = minOf(canvasSize.width, canvasSize.height) * 0.4f / density
+    val sideDp = minOf(120f, maxSideDp).coerceAtLeast(30f)
+    val sidePx = sideDp * density
+
+    return ShapeElement(
+        type = type,
+        position = Offset(
+            (canvasSize.width - sidePx) / 2f,
+            (canvasSize.height - sidePx) / 2f
+        ),
+        size = Size(sideDp, sideDp)
+    )
 }

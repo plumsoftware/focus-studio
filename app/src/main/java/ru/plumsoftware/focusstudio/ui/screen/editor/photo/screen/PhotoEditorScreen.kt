@@ -54,6 +54,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -77,15 +82,23 @@ import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
 import ru.plumsoftware.focusstudio.data.AdsConfig
+import ru.plumsoftware.focusstudio.data.AppPrefs
+import ru.plumsoftware.focusstudio.ui.screen.editor.ZoomableBox
+import ru.plumsoftware.focusstudio.ui.screen.editor.ads.EditorNativeAd
+import ru.plumsoftware.focusstudio.ui.screen.editor.ads.rememberEditorNativeAdState
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.adjust.AdjustPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.AdvancedCropOverlay
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.EditorTools
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.CropPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextElement
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.AdConsentDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.filter.FilterRow
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.calculateRectForRatio
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.cropViewTransform
+import ru.plumsoftware.focusstudio.ui.screen.editor.photo.fittedImageRect
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getCombinedMatrix
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.saveEditedImage
@@ -114,11 +127,30 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var isExporting by remember { mutableStateOf(false) }
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
 
+    // --- КАДРИРОВАНИЕ ---
+    // Пропорции самого фото (ширина / высота). Нужны, чтобы знать, где оно лежит на экране.
+    var imageAspect by remember { mutableStateOf<Float?>(null) }
+    // Черновик рамки: живёт, пока открыта вкладка «Обрезка», и попадает в настройки
+    // только по кнопке «Применить». Ушли с вкладки без неё — обрезка не меняется.
+    var cropDraftRect by remember { mutableStateOf(Rect(0f, 0f, 1f, 1f)) }
+    var cropDraftRatio by remember { mutableStateOf<Float?>(null) }
+    val containerSize = Size(boxSize.width.toFloat(), boxSize.height.toFloat())
+    // Пока фото не загрузилось, считаем, что оно занимает весь контейнер.
+    val shownAspect = imageAspect
+        ?: if (boxSize.height > 0) containerSize.width / containerSize.height else 1f
+
     // --- СОСТОЯНИЕ РЕКЛАМЫ ---
     var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     val adLoader = remember { InterstitialAdLoader(context) }
 
+    // Нативная реклама под инструментами: грузится один раз на весь экран редактора
+    // и не зависит от выбранной вкладки.
+    val nativeAdState = rememberEditorNativeAdState()
+
     LaunchedEffect(Unit) {
+        // Межстраничная реклама показывается только начиная с 3-го сохранения,
+        // раньше её незачем и загружать.
+        if (!AppPrefs.shouldPreloadSaveAd(context)) return@LaunchedEffect
         val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
         adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
             override fun onAdLoaded(ad: InterstitialAd) {
@@ -187,8 +219,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         } ?: unknownFileName
     }
 
-    fun updateLiveSettings(newSettings: PhotoSettings) {
-        history[currentIndex] = newSettings
+    // При каждом входе на вкладку «Обрезка» рамка начинает с уже применённой обрезки.
+    LaunchedEffect(activeTool) {
+        if (activeTool == EditorTools.CROP) {
+            cropDraftRect = currentSettings.cropRect
+            cropDraftRatio = currentSettings.aspectRatio
+        }
     }
 
     Scaffold(
@@ -199,8 +235,14 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
                         isExporting = false
                         if (uri != null) {
-                            // Перед рекламой показываем окно-согласие с крестиком.
-                            showAdConsent = true
+                            val saves = AppPrefs.registerSuccessfulSave(context)
+                            if (saves >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS) {
+                                // Перед рекламой показываем окно-согласие с крестиком.
+                                showAdConsent = true
+                            } else {
+                                // Первые сохранения — без рекламы, сразу «Готово».
+                                showExportDialog = true
+                            }
                         }
                     }
                 }
@@ -267,27 +309,39 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     }
                 }
 
-                // Контейнер фото
-                Box(
+                // Контейнер фото. Двумя пальцами его можно увеличить и листать;
+                // это только предпросмотр, на сохранение не влияет.
+                ZoomableBox(
                     modifier = Modifier
                         .padding(FocusDesign.paddingMedium)
                         .fillMaxSize()
-                        .clipToBounds()
                         .onGloballyPositioned { boxSize = it.size }
                 ) {
+                    val isCropping = activeTool == EditorTools.CROP
+                    // Во время обрезки показываем фото целиком, иначе — только выбранный фрагмент,
+                    // равномерно увеличенный под контейнер (без растягивания).
+                    val shownCrop = if (isCropping) Rect(0f, 0f, 1f, 1f) else currentSettings.cropRect
+                    val viewTransform = cropViewTransform(containerSize, shownAspect, shownCrop)
+
                     AsyncImage(
                         model = photoUri,
                         contentDescription = null,
                         colorFilter = ColorFilter.colorMatrix(getCombinedMatrix(currentSettings)),
                         contentScale = ContentScale.Fit,
+                        onSuccess = { state ->
+                            val intrinsic = state.painter.intrinsicSize
+                            if (intrinsic.width > 0f && intrinsic.height > 0f) {
+                                imageAspect = intrinsic.width / intrinsic.height
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                val rect = currentSettings.cropRect
-                                scaleX = 1f / (rect.right - rect.left)
-                                scaleY = 1f / (rect.bottom - rect.top)
-                                translationX = -rect.left * size.width * scaleX
-                                translationY = -rect.top * size.height * scaleY
+                                transformOrigin = TransformOrigin(0f, 0f)
+                                scaleX = viewTransform.scale
+                                scaleY = viewTransform.scale
+                                translationX = viewTransform.tx
+                                translationY = viewTransform.ty
                                 rotationY = currentSettings.skewX * 40f
                                 // Эффект размытия
                                 if (currentSettings.blur > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -298,11 +352,31 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                     ).asComposeRenderEffect()
                                 }
                             }
+                            // Прячем всё, что за пределами выбранного фрагмента
+                            .drawWithContent {
+                                val c = viewTransform.cropInContainer
+                                clipRect(c.left, c.top, c.right, c.bottom) {
+                                    this@drawWithContent.drawContent()
+                                }
+                            }
                     )
 
-                    // Отрисовка текста
-                    currentSettings.texts.forEach { textItem ->
+                    // Отрисовка текста (на время обрезки текст и фигуры скрыты:
+                    // фото показано целиком, и их положение относительно него было бы другим)
+                    if (!isCropping) currentSettings.texts.forEach { textItem ->
                         val currentTextState by rememberUpdatedState(textItem)
+                        // pointerInput привязан к id и не перезапускается, поэтому берём
+                        // актуальный колбэк — иначе перетаскивание текста откатывало
+                        // остальные настройки к устаревшему снимку.
+                        val commitTextMove by rememberUpdatedState { moved: TextElement ->
+                            updateSettings(
+                                currentSettings.copy(
+                                    texts = currentSettings.texts.map {
+                                        if (it.id == moved.id) moved else it
+                                    }
+                                )
+                            )
+                        }
                         var localOffset by remember(textItem.id) { mutableStateOf(textItem.position) }
 
                         LaunchedEffect(textItem.position) {
@@ -320,13 +394,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                         localOffset += dragAmount
                                     },
                                     onDragEnd = {
-                                        val finalUpdate = currentTextState.copy(position = localOffset)
-                                        updateSettings(
-                                            currentSettings.copy(
-                                                texts = currentSettings.texts.map {
-                                                    if (it.id == textItem.id) finalUpdate else it
-                                                }
-                                            ))
+                                        commitTextMove(currentTextState.copy(position = localOffset))
                                     }
                                 )
                             }
@@ -359,7 +427,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         }
                     }
 
-                    currentSettings.shapes.forEach { shape ->
+                    if (!isCropping) currentSettings.shapes.forEach { shape ->
                         ShapeComponent(
                             shape = shape,
                             isSelected = selectedShapeId == shape.id,
@@ -377,18 +445,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     }
 
                     // Оверлей кадрирования
-                    if (activeTool == EditorTools.CROP) {
+                    if (isCropping) {
                         AdvancedCropOverlay(
-                            currentSettings = currentSettings,
-                            onCropApply = { newRect ->
-                                updateSettings(
-                                    currentSettings.copy(
-                                        cropRect = newRect,
-                                        aspectRatio = (newRect.width / newRect.height)
-                                    )
-                                )
-                                activeTool = EditorTools.ADJUST
-                            }
+                            rect = cropDraftRect,
+                            imageBounds = fittedImageRect(containerSize, shownAspect),
+                            aspectRatio = cropDraftRatio,
+                            onRectChange = { cropDraftRect = it }
                         )
                     }
                 }
@@ -449,7 +511,25 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                                 )
                             }
 
-                            EditorTools.CROP -> CropPanel(currentSettings) { updateLiveSettings(it) }
+                            EditorTools.CROP -> CropPanel(
+                                onRatioSelected = { ratio ->
+                                    cropDraftRatio = ratio
+                                    // Пресет сразу ставит рамку нужных пропорций по центру фото;
+                                    // «Свободно» лишь снимает ограничение, рамка остаётся как есть.
+                                    if (ratio != null) {
+                                        cropDraftRect = calculateRectForRatio(ratio, shownAspect)
+                                    }
+                                },
+                                onApply = {
+                                    updateSettings(
+                                        currentSettings.copy(
+                                            cropRect = cropDraftRect,
+                                            aspectRatio = cropDraftRatio
+                                        )
+                                    )
+                                    activeTool = EditorTools.ADJUST
+                                }
+                            )
                             EditorTools.TEXT -> TextControlPanel(
                                 settings = currentSettings,
                                 selectedTextId = selectedTextId,
@@ -465,11 +545,17 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                             EditorTools.SHAPES -> ShapeControlPanel(
                                 settings = currentSettings,
                                 selectedShapeId = selectedShapeId,
+                                canvasSize = boxSize,
+                                onShapeAdded = { selectedShapeId = it },
                                 onUpdate = { updateSettings(it) },
                                 onClose = { selectedShapeId = null }
                             )
                         }
                     }
+
+                    // НАТИВНАЯ РЕКЛАМА: стоит вне when(activeTool), поэтому при смене
+                    // вкладок не пересоздаётся и не перезагружается.
+                    EditorNativeAd(state = nativeAdState)
                 }
             }
 

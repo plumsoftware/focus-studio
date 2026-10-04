@@ -93,6 +93,10 @@ import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
 import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
+import ru.plumsoftware.focusstudio.data.AppPrefs
+import ru.plumsoftware.focusstudio.ui.screen.editor.ZoomableBox
+import ru.plumsoftware.focusstudio.ui.screen.editor.ads.EditorNativeAd
+import ru.plumsoftware.focusstudio.ui.screen.editor.ads.rememberEditorNativeAdState
 import ru.plumsoftware.focusstudio.ui.screen.IosExportErrorDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.AdConsentDialog
@@ -150,7 +154,14 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     val adLoader = remember { InterstitialAdLoader(context) }
 
+    // Нативная реклама под инструментами: грузится один раз на весь экран редактора
+    // и не зависит от выбранной вкладки.
+    val nativeAdState = rememberEditorNativeAdState()
+
     LaunchedEffect(Unit) {
+        // Межстраничная реклама показывается только начиная с 3-го сохранения,
+        // раньше её незачем и загружать.
+        if (!AppPrefs.shouldPreloadSaveAd(context)) return@LaunchedEffect
         val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
         adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
             override fun onAdLoaded(ad: InterstitialAd) { interstitialAd = ad }
@@ -460,8 +471,14 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     onResult = { uri ->
                         isExporting = false
                         if (uri != null) {
-                            // Перед рекламой показываем окно-согласие с крестиком.
-                            showAdConsent = true
+                            val saves = AppPrefs.registerSuccessfulSave(context)
+                            if (saves >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS) {
+                                // Перед рекламой показываем окно-согласие с крестиком.
+                                showAdConsent = true
+                            } else {
+                                // Первые сохранения — без рекламы, сразу «Готово».
+                                showExportDialog = true
+                            }
                         } else {
                             showExportErrorDialog = true
                         }
@@ -480,11 +497,29 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                 .fillMaxSize()
         ) {
 
-            // 1. ПЛЕЕР
-            Box(
-                Modifier
+            // 1. ПЛЕЕР. Двумя пальцами его можно увеличить и листать;
+            // это только предпросмотр, на экспорт не влияет.
+            ZoomableBox(
+                modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(), contentAlignment = Alignment.Center
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+                overlay = {
+                    // Кнопка воспроизведения — поверх, не увеличивается вместе с видео
+                    IconButton(
+                        onClick = { isPlaying = !isPlaying; exoPlayer.playWhenReady = isPlaying },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(64.dp)
+                            .background(Color.Black.copy(0.4f), CircleShape)
+                    ) {
+                        Icon(
+                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            null,
+                            tint = Color.White
+                        )
+                    }
+                }
             ) {
                 Box(
                     modifier = Modifier
@@ -594,19 +629,6 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             )
                         }
                     }
-                }
-
-                IconButton(
-                    onClick = { isPlaying = !isPlaying; exoPlayer.playWhenReady = isPlaying },
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(Color.Black.copy(0.4f), CircleShape)
-                ) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        null,
-                        tint = Color.White
-                    )
                 }
             }
 
@@ -737,6 +759,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                                 ShapeControlPanel(
                                     settings = PhotoSettingsAdapter.toPhoto(video = settings),
                                     selectedShapeId = selectedShapeId,
+                                    canvasSize = playerViewSize,
+                                    onShapeAdded = { selectedShapeId = it },
                                     onUpdate = {
                                         updateSettings(
                                             PhotoSettingsAdapter.toVideo(
@@ -794,6 +818,10 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                             }
                         }
                     }
+
+                    // НАТИВНАЯ РЕКЛАМА: стоит вне when(activeTool), поэтому при смене
+                    // вкладок не пересоздаётся и не перезагружается.
+                    EditorNativeAd(state = nativeAdState)
                 }
             }
         }

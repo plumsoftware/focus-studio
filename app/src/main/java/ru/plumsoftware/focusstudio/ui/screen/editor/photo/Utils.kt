@@ -9,6 +9,7 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.*
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -81,17 +82,108 @@ fun getCombinedMatrix(settings: PhotoSettings): ColorMatrix {
     return result
 }
 
-fun calculateRectForRatio(ratio: Float?): Rect {
-    if (ratio == null) return Rect(0.1f, 0.1f, 0.9f, 0.9f)
-
-    // Вписываем пресет в центр (нормализованные координаты 0..1)
-    return if (ratio > 1f) { // Горизонтальный (напр. 16:9)
-        val h = 0.8f / ratio
-        Rect(0.1f, 0.5f - h/2f, 0.9f, 0.5f + h/2f)
-    } else { // Вертикальный (напр. 3:4)
-        val w = 0.8f * ratio
-        Rect(0.5f - w/2f, 0.1f, 0.5f + w/2f, 0.9f)
+/**
+ * Рамка кадрирования под выбранный пресет.
+ *
+ * ВАЖНО: cropRect хранится в долях ИЗОБРАЖЕНИЯ (0..1 по ширине и высоте фото),
+ * а [ratio] — это пропорции результата в пикселях (ширина / высота). Поэтому
+ * для расчёта нужны пропорции самого фото [imageAspect]: иначе «1:1» на
+ * вытянутом снимке получался не квадратом.
+ *
+ * Возвращает максимально большую рамку нужных пропорций по центру фото.
+ */
+fun calculateRectForRatio(ratio: Float, imageAspect: Float): Rect {
+    // Пропорции рамки в нормализованных координатах (доля ширины / доля высоты)
+    val normalized = ratio / imageAspect
+    return if (normalized >= 1f) {
+        val h = 1f / normalized
+        Rect(0f, 0.5f - h / 2f, 1f, 0.5f + h / 2f)
+    } else {
+        Rect(0.5f - normalized / 2f, 0f, 0.5f + normalized / 2f, 1f)
     }
+}
+
+/**
+ * Где на экране реально лежит фото, вписанное (ContentScale.Fit) в контейнер.
+ * Контейнер почти никогда не совпадает с фото по пропорциям — по краям остаются поля.
+ */
+fun fittedImageRect(container: Size, imageAspect: Float): Rect {
+    if (container.width <= 0f || container.height <= 0f || imageAspect <= 0f) {
+        return Rect(0f, 0f, container.width, container.height)
+    }
+    val containerAspect = container.width / container.height
+    val w: Float
+    val h: Float
+    if (imageAspect > containerAspect) {
+        w = container.width
+        h = w / imageAspect
+    } else {
+        h = container.height
+        w = h * imageAspect
+    }
+    val left = (container.width - w) / 2f
+    val top = (container.height - h) / 2f
+    return Rect(left, top, left + w, top + h)
+}
+
+/**
+ * Как показать обрезанное фото: выбранный фрагмент равномерно (без искажений)
+ * увеличивается и ставится по центру контейнера.
+ * Преобразование: экран = точка * scale + (tx, ty), начало координат — левый верхний угол.
+ */
+data class CropViewTransform(
+    val scale: Float,
+    val tx: Float,
+    val ty: Float,
+    /** Обрезаемая область в координатах контейнера ДО преобразования. */
+    val cropInContainer: Rect
+)
+
+fun cropViewTransform(container: Size, imageAspect: Float, crop: Rect): CropViewTransform {
+    val fitted = fittedImageRect(container, imageAspect)
+    val region = Rect(
+        fitted.left + crop.left * fitted.width,
+        fitted.top + crop.top * fitted.height,
+        fitted.left + crop.right * fitted.width,
+        fitted.top + crop.bottom * fitted.height
+    )
+    if (region.width <= 0f || region.height <= 0f) {
+        return CropViewTransform(1f, 0f, 0f, region)
+    }
+    val scale = minOf(container.width / region.width, container.height / region.height)
+    val tx = (container.width - region.width * scale) / 2f - region.left * scale
+    val ty = (container.height - region.height * scale) / 2f - region.top * scale
+    return CropViewTransform(scale, tx, ty, region)
+}
+
+/** Читает фото и поворачивает его по EXIF — так же, как его показывает редактор. */
+private fun decodeBitmapWithOrientation(context: Context, uri: Uri): Bitmap? {
+    val resolver = context.contentResolver
+    val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return null
+
+    val orientation = try {
+        resolver.openInputStream(uri)?.use {
+            ExifInterface(it).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+        } ?: ExifInterface.ORIENTATION_NORMAL
+    } catch (e: Exception) {
+        ExifInterface.ORIENTATION_NORMAL
+    }
+
+    val matrix = Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(90f); matrix.postScale(-1f, 1f) }
+        ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(270f); matrix.postScale(-1f, 1f) }
+        else -> return bitmap
+    }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
 fun Path.addStar(size: Size, spikes: Int = 5, outerRadius: Float, innerRadius: Float) {
@@ -134,8 +226,13 @@ fun saveEditedImage(
     onComplete: (Uri?) -> Unit
 ) {
     val resolver = context.contentResolver
-    val inputStream = resolver.openInputStream(originalUri)
-    val originalBitmap = BitmapFactory.decodeStream(inputStream) ?: return
+    // Фото читаем с учётом EXIF-поворота: редактор показывает его уже повёрнутым,
+    // и без этого на снимках с камеры вырезался не тот кусок.
+    val originalBitmap = decodeBitmapWithOrientation(context, originalUri)
+    if (originalBitmap == null) {
+        onComplete(null)
+        return
+    }
 
     // Получаем плотность экрана (например, 2.0, 3.0 и т.д.)
     val screenDensity = context.resources.displayMetrics.density
@@ -157,11 +254,26 @@ fun saveEditedImage(
     val scaleFactor = bitmapWidth / actualImageOnScreenWidth
 
     // --- ШАГ 2: Кроп ---
+    // cropRect — в долях самого фото, поэтому просто умножаем на размер файла.
     val crop = settings.cropRect
-    val left = (bitmapWidth * crop.left).toInt()
-    val top = (bitmapHeight * crop.top).toInt()
+    val left = (bitmapWidth * crop.left).toInt().coerceIn(0, originalBitmap.width - 1)
+    val top = (bitmapHeight * crop.top).toInt().coerceIn(0, originalBitmap.height - 1)
     val width = (bitmapWidth * (crop.right - crop.left)).toInt()
+        .coerceIn(1, originalBitmap.width - left)
     val height = (bitmapHeight * (crop.bottom - crop.top)).toInt()
+        .coerceIn(1, originalBitmap.height - top)
+
+    // На экране обрезанное фото показано увеличенным (см. cropViewTransform), а текст и
+    // фигуры стоят в координатах экрана. Возвращаем их в координаты фото тем же преобразованием.
+    val view = cropViewTransform(
+        Size(containerWidth, containerHeight),
+        bitmapWidth / bitmapHeight,
+        crop
+    )
+    // Экранные пиксели увеличенного вида -> пиксели файла
+    val elementScale = scaleFactor / view.scale
+    fun toFileX(screenX: Float) = ((screenX - view.tx) / view.scale - offsetX) * scaleFactor - left
+    fun toFileY(screenY: Float) = ((screenY - view.ty) / view.scale - offsetY) * scaleFactor - top
 
     val croppedBitmap = Bitmap.createBitmap(originalBitmap, left, top, width, height)
     val processedBitmap = applyEffectsToBitmap(context, croppedBitmap, settings)
@@ -173,14 +285,16 @@ fun saveEditedImage(
     // --- ШАГ 3: Отрисовка ФИГУР ---
     settings.shapes.forEach { shape ->
         canvas.withSave {
-            val posX = ((shape.position.x - offsetX) * scaleFactor) - left
-            val posY = ((shape.position.y - offsetY) * scaleFactor) - top
+            val posX = toFileX(shape.position.x)
+            val posY = toFileY(shape.position.y)
+
+            // Размер фигуры задан в dp
+            val shapeW = shape.size.width * screenDensity * elementScale
+            val shapeH = shape.size.height * screenDensity * elementScale
 
             translate(posX, posY)
-            rotate(shape.rotation)
-
-            val shapeW = shape.size.width * scaleFactor
-            val shapeH = shape.size.height * scaleFactor
+            // Вращаем вокруг центра фигуры — так же, как она показана на экране
+            rotate(shape.rotation, shapeW / 2f, shapeH / 2f)
             val path = createAndroidShapePath(shape.type, shapeW, shapeH)
 
             if (shape.fillColor != androidx.compose.ui.graphics.Color.Transparent) {
@@ -194,7 +308,7 @@ fun saveEditedImage(
                     color = shape.strokeColor.toArgb()
                     style = Paint.Style.STROKE
                     // Толщину обводки тоже нужно масштабировать с учетом плотности
-                    strokeWidth = 2f * screenDensity * scaleFactor
+                    strokeWidth = 2f * screenDensity * elementScale
                 })
             }
         }
@@ -208,12 +322,12 @@ fun saveEditedImage(
             color = if (isChip) android.graphics.Color.WHITE else text.color.toArgb()
             isFakeBoldText = isChip
             // Так как в UI используется .sp, реальный размер в пикселях = fontSize * density
-            textSize = text.fontSize * screenDensity * scaleFactor
+            textSize = text.fontSize * screenDensity * elementScale
             typeface = getAndroidTypeface(context, text.fontFamily)
         }
 
-        val posX = ((text.position.x - offsetX) * scaleFactor) - left
-        val posY = ((text.position.y - offsetY) * scaleFactor) - top
+        val posX = toFileX(text.position.x)
+        val posY = toFileY(text.position.y)
 
         // Ширина текста также должна учитывать масштабирование
         val textWidth = textPaint.measureText(text.text).toInt().coerceAtLeast(1)
@@ -233,8 +347,8 @@ fun saveEditedImage(
 
             // Чип-подложка под текстом — цвет/градиент зависит от выбранного backgroundStyle
             if (isChip) {
-                val paddingH = 14.dp.toPxRaw(context) * scaleFactor
-                val paddingV = 6.dp.toPxRaw(context) * scaleFactor
+                val paddingH = 14.dp.toPxRaw(context) * elementScale
+                val paddingV = 6.dp.toPxRaw(context) * elementScale
 
                 val chipRect = RectF(
                     -paddingH,

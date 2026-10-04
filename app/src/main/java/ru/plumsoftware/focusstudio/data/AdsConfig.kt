@@ -20,4 +20,8 @@ object AdsConfig {
 
     val INTERSTITIAL_ADS_ID =
         if (BuildConfig.DEBUG) "demo-interstitial-yandex" else BuildConfig.INTERSTITIAL_ADS_ID
+
+    /** Нативная реклама под панелью инструментов фото- и видеоредактора. */
+    val NATIVE_ADS_ID =
+        if (BuildConfig.DEBUG) "demo-native-content-yandex" else BuildConfig.NATIVE_ADS_ID
 }
