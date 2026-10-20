@@ -151,6 +151,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         // Межстраничная реклама показывается только начиная с 3-го сохранения,
         // раньше её незачем и загружать.
         if (!AppPrefs.shouldPreloadSaveAd(context)) return@LaunchedEffect
+        if (!AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID)) return@LaunchedEffect
         val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
         adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
             override fun onAdLoaded(ad: InterstitialAd) {
@@ -236,11 +237,12 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                         isExporting = false
                         if (uri != null) {
                             val saves = AppPrefs.registerSuccessfulSave(context)
-                            if (saves >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS) {
+                            if (saves >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS && interstitialAd != null) {
                                 // Перед рекламой показываем окно-согласие с крестиком.
+                                // Если объявление не загрузилось (или реклама отключена), окно не нужно.
                                 showAdConsent = true
                             } else {
-                                // Первые сохранения — без рекламы, сразу «Готово».
+                                // Первые сохранения или нет рекламы — сразу «Готово».
                                 showExportDialog = true
                             }
                         }

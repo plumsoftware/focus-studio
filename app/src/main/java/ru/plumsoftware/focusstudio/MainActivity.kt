@@ -60,7 +60,9 @@ class MainActivity : ComponentActivity() {
             var showPermissionDialog by remember { mutableStateOf(false) }
             val context = LocalContext.current
             val navController = rememberNavController()
-            val shouldShowLaunchAd = remember { AppPrefs.shouldShowLaunchAd(context) }
+            val shouldShowLaunchAd = remember {
+                AppPrefs.shouldShowLaunchAd(context) && AdsConfig.isEnabled(AdsConfig.OPEN_ADS_ID)
+            }
 
             // 1. Выносим логику загрузки рекламы в отдельную функцию
             val startLoadingAds: () -> Unit = {

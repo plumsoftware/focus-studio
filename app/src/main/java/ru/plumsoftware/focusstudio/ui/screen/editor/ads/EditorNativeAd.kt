@@ -88,6 +88,8 @@ fun rememberEditorNativeAdState(
     val state = remember { EditorNativeAdState() }
 
     DisposableEffect(adUnitId) {
+        // Реклама отключена для этого магазина — блок просто не появится.
+        if (!AdsConfig.isEnabled(adUnitId)) return@DisposableEffect onDispose {}
         val loader = NativeAdLoader(context)
         loader.loadAd(
             AdRequest.Builder(adUnitId).build(),

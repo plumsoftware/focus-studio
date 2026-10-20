@@ -14,8 +14,8 @@ android {
         applicationId = "ru.plumsoftware.focusstudio"
         minSdk = 24
         targetSdk = 37
-        versionCode = 14
-        versionName = "1.1.3"
+        versionCode = 15
+        versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -36,7 +36,8 @@ android {
     // Магазин приложений выбирается через product flavor.
     // PLATFORM: 1 = RuStore, 2 = Google Play, 3 = Huawei App Gallery.
     // Каждый флейвор задаёт свои боевые рекламные ID Yandex. В debug-сборке
-    // (любой флейвор) AdsConfig подменяет их на демо-идентификаторы.
+    // AdsConfig подменяет непустые ID на демо-идентификаторы; пустой ID
+    // (Google Play) отключает соответствующую рекламу в любой сборке.
     flavorDimensions += "store"
     productFlavors {
         create("rustore") {
@@ -49,9 +50,10 @@ android {
         create("googleplay") {
             dimension = "store"
             buildConfigField("int", "PLATFORM", "2")
-            buildConfigField("String", "OPEN_ADS_ID", "\"demo-appopenad-yandex\"")
-            buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"demo-interstitial-yandex\"")
-            buildConfigField("String", "NATIVE_ADS_ID", "\"demo-native-content-yandex\"")
+            // Для Google Play реклама пока не подключена: пустые ID отключают её полностью.
+            buildConfigField("String", "OPEN_ADS_ID", "\"\"")
+            buildConfigField("String", "INTERSTITIAL_ADS_ID", "\"\"")
+            buildConfigField("String", "NATIVE_ADS_ID", "\"\"")
         }
         create("huawei") {
             dimension = "store"
@@ -111,5 +113,5 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
 
     //Yandex Ads
-    implementation("com.yandex.android:mobileads:8.5.0")
+    implementation("com.yandex.android:mobileads:8.6.0")
 }
