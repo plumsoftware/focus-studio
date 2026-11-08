@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -83,11 +84,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
-import com.yandex.mobile.ads.common.AdError
 import com.yandex.mobile.ads.common.AdRequest
 import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
-import com.yandex.mobile.ads.interstitial.InterstitialAd
 import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
@@ -99,7 +98,6 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.ads.EditorNativeAd
 import ru.plumsoftware.focusstudio.ui.screen.editor.ads.rememberEditorNativeAdState
 import ru.plumsoftware.focusstudio.ui.screen.IosExportErrorDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.AdConsentDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.getFontFamily
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.EditorToolItem
@@ -142,7 +140,8 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var showExportErrorDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
-    var showAdConsent by remember { mutableStateOf(false) }
+    var isAdLoading by remember { mutableStateOf(false) }
+    var successfulSaveCount by remember { mutableIntStateOf(AppPrefs.getSaveCount(context)) }
     val density = LocalDensity.current
 
     // ID выбранных объектов
@@ -151,59 +150,78 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
 
     // --- ЛОГИКА РЕКЛАМЫ ---
-    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     val adLoader = remember { InterstitialAdLoader(context) }
+    val nativeAdState = rememberEditorNativeAdState(
+        isUnlocked = successfulSaveCount >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS
+    )
 
-    // Нативная реклама под инструментами: грузится один раз на весь экран редактора
-    // и не зависит от выбранной вкладки.
-    val nativeAdState = rememberEditorNativeAdState()
+    // Кодирование и запись в галерею запускаются только после закрытия рекламы.
+    fun startVideoExport() {
+        isAdLoading = false
+        isExporting = true
+        isPlaying = false
+        exoPlayer.stop()
+        exoPlayer.clearMediaItems()
 
-    LaunchedEffect(Unit) {
-        // Межстраничная реклама показывается только начиная с 3-го сохранения,
-        // раньше её незачем и загружать.
-        if (!AppPrefs.shouldPreloadSaveAd(context)) return@LaunchedEffect
-        if (!AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID)) return@LaunchedEffect
-        val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
-        adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
-            override fun onAdLoaded(ad: InterstitialAd) { interstitialAd = ad }
-            override fun onAdFailedToLoad(error: AdRequestError) { interstitialAd = null }
-        })
+        exportVideo(
+            context = context,
+            displaySize = playerViewSize,
+            settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
+            density = density.density,
+            onResult = { uri ->
+                isExporting = false
+                if (uri != null) {
+                    successfulSaveCount = AppPrefs.registerSuccessfulSave(context)
+                    showExportDialog = true
+                } else {
+                    showExportErrorDialog = true
+                }
+                refreshPlaylist()
+                exoPlayer.playWhenReady = false
+            }
+        )
     }
 
-    // ФУНКЦИЯ: ПОКАЗ РЕКЛАМЫ, ЗАТЕМ ДИАЛОГА
-    val showAdAndThenDialog = {
-        if (interstitialAd != null && activity != null) {
-            interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
-                override fun onAdShown() {}
-                override fun onAdFailedToShow(adError: AdError) { showExportDialog = true }
-                override fun onAdDismissed() { showExportDialog = true } // Показываем диалог ПОСЛЕ рекламы
-                override fun onAdClicked() {}
-                override fun onAdImpression(impressionData: ImpressionData?) {}
-            })
-            interstitialAd?.show(activity)
-        } else {
-            showExportDialog = true // Если рекламы нет - сразу диалог
+    fun requestInterstitialThenExport() {
+        if (successfulSaveCount < AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS ||
+            !AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID) || activity == null
+        ) {
+            startVideoExport()
+            return
         }
-    }
 
-    val showAdAndDialog = {
-        showExportDialog = true
-        if (interstitialAd != null && activity != null) {
-            interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
-                override fun onAdShown() {}
-                override fun onAdFailedToShow(adError: AdError) {
-                    // Если реклама не смогла показаться, пользователь просто увидит диалог
+        isAdLoading = true
+        adLoader.loadAd(
+            AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build(),
+            object : InterstitialAdLoadListener {
+                override fun onAdLoaded(ad: com.yandex.mobile.ads.interstitial.InterstitialAd) {
+                    isAdLoading = false
+                    var continued = false
+                    fun continueExport() {
+                        if (continued) return
+                        continued = true
+                        startVideoExport()
+                    }
+                    ad.setAdEventListener(object : InterstitialAdEventListener {
+                        override fun onAdShown() {}
+                        override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) = continueExport()
+                        override fun onAdDismissed() = continueExport()
+                        override fun onAdClicked() {}
+                        override fun onAdImpression(impressionData: ImpressionData?) {}
+                    })
+                    try {
+                        ad.show(activity)
+                    } catch (_: Exception) {
+                        continueExport()
+                    }
                 }
 
-                override fun onAdDismissed() {
-                    // Реклама закрыта, под ней уже висит наш диалог
+                override fun onAdFailedToLoad(error: AdRequestError) {
+                    // Не блокируем экспорт, если рекламная сеть недоступна.
+                    startVideoExport()
                 }
-
-                override fun onAdClicked() {}
-                override fun onAdImpression(impressionData: ImpressionData?) {}
-            })
-            interstitialAd?.show(activity)
-        }
+            }
+        )
     }
 
     // Функция обновления настроек (аналогично фото)
@@ -458,37 +476,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
     Scaffold(
         topBar = {
             EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {
-                isExporting = true
-                isPlaying = false
-
-                exoPlayer.stop()
-                exoPlayer.clearMediaItems()
-
-                exportVideo(
-                    context = context,
-                    displaySize = playerViewSize,
-                    settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
-                    density = density.density,
-                    onResult = { uri ->
-                        isExporting = false
-                        if (uri != null) {
-                            val saves = AppPrefs.registerSuccessfulSave(context)
-                            if (saves >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS && interstitialAd != null) {
-                                // Перед рекламой показываем окно-согласие с крестиком.
-                                // Если объявление не загрузилось (или реклама отключена), окно не нужно.
-                                showAdConsent = true
-                            } else {
-                                // Первые сохранения или нет рекламы — сразу «Готово».
-                                showExportDialog = true
-                            }
-                        } else {
-                            showExportErrorDialog = true
-                        }
-
-                        refreshPlaylist()
-                        exoPlayer.playWhenReady = false
-                    }
-                )
+                if (!isExporting && !isAdLoading) requestInterstitialThenExport()
             })
         },
         containerColor = Color.Black
@@ -828,7 +816,7 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
             }
         }
 
-        if (isExporting) {
+        if (isExporting || isAdLoading) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -839,27 +827,13 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
                     CircularProgressIndicator(color = AccentStart, strokeWidth = 3.dp)
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        stringResource(R.string.exporting_video),
+                        if (isAdLoading) stringResource(R.string.loading_ads)
+                        else stringResource(R.string.exporting_video),
                         color = Color.White,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
-        }
-
-        if (showAdConsent) {
-            AdConsentDialog(
-                onSkip = {
-                    // Крестик / «Пропустить» — рекламу не показываем, сразу к «Готово».
-                    showAdConsent = false
-                    showExportDialog = true
-                },
-                onWatch = {
-                    // 3 секунды прошли — показываем рекламу, затем диалог «Готово».
-                    showAdConsent = false
-                    showAdAndThenDialog()
-                }
-            )
         }
 
         if (showExportErrorDialog) {
