@@ -1,0 +1,119 @@
+name: Build store APKs
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - gradle.properties
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Signed RuStore and Huawei APKs
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version code increase
+        id: version
+        shell: bash
+        run: |
+          current="$(awk -F= '$1 == "APP_VERSION_CODE" { gsub(/[[:space:]]/, "", $2); print $2; exit }' gradle.properties)"
+          if [[ ! "$current" =~ ^[0-9]+$ ]]; then
+            echo "APP_VERSION_CODE must be a positive integer in gradle.properties"
+            exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "increased=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          before="${{ github.event.before }}"
+          previous="0"
+          if [[ -n "$before" && "$before" != "0000000000000000000000000000000000000000" ]]; then
+            previous="$(git show "${before}:gradle.properties" 2>/dev/null | awk -F= '$1 == "APP_VERSION_CODE" { gsub(/[[:space:]]/, "", $2); print $2; exit }' || true)"
+          fi
+          previous="${previous:-0}"
+          if [[ ! "$previous" =~ ^[0-9]+$ ]]; then previous="0"; fi
+
+          echo "Previous APP_VERSION_CODE: $previous"
+          echo "Current APP_VERSION_CODE: $current"
+          if (( current > previous )); then
+            echo "increased=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "increased=false" >> "$GITHUB_OUTPUT"
+            echo "Version code was not increased; skipping APK build."
+          fi
+
+      - name: Set up Java 17
+        if: steps.version.outputs.increased == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        if: steps.version.outputs.increased == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Validate signing credentials
+        if: steps.version.outputs.increased == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -f app/key_store || { echo "app/key_store was not found"; exit 1; }
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || { echo "Missing secret ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$ANDROID_KEY_ALIAS" || { echo "Missing secret ANDROID_KEY_ALIAS"; exit 1; }
+          test -n "$ANDROID_KEY_PASSWORD" || { echo "Missing secret ANDROID_KEY_PASSWORD"; exit 1; }
+
+      - name: Set up Gradle
+        if: steps.version.outputs.increased == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build signed release APKs
+        if: steps.version.outputs.increased == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:assembleRustoreRelease :app:assembleHuaweiRelease
+
+      - name: Collect APK files
+        if: steps.version.outputs.increased == 'true'
+        shell: bash
+        env:
+          APP_VERSION_CODE: ${{ steps.version.outputs.current }}
+        run: |
+          mkdir -p dist
+          rustore_apk="$(find app/build/outputs/apk/rustore/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          huawei_apk="$(find app/build/outputs/apk/huawei/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$rustore_apk" || { echo "RuStore APK was not produced"; exit 1; }
+          test -n "$huawei_apk" || { echo "Huawei APK was not produced"; exit 1; }
+          cp "$rustore_apk" "dist/FocusStudio-RuStore-v${APP_VERSION_CODE}.apk"
+          cp "$huawei_apk" "dist/FocusStudio-Huawei-v${APP_VERSION_CODE}.apk"
+
+      - name: Upload APK artifacts
+        if: steps.version.outputs.increased == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FocusStudio-Store-APKs-${{ github.run_number }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30

@@ -14,7 +14,7 @@ android {
         applicationId = "ru.plumsoftware.focusstudio"
         minSdk = 24
         targetSdk = 37
-        versionCode = 15
+        versionCode = providers.gradleProperty("APP_VERSION_CODE").get().toInt()
         versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -23,8 +23,19 @@ android {
         renderscriptSupportModeEnabled = true
     }
 
+    signingConfigs {
+        create("release") {
+            // Keystore is committed at app/key_store; credentials are supplied by GitHub Secrets.
+            storeFile = file("key_store")
+            storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull ?: ""
+            keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull ?: ""
+            keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull ?: ""
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
