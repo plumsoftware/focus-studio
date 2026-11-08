@@ -73,11 +73,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.yandex.mobile.ads.common.AdError
 import com.yandex.mobile.ads.common.AdRequest
 import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
-import com.yandex.mobile.ads.interstitial.InterstitialAd
 import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
@@ -93,7 +91,6 @@ import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.PhotoSettings
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.crop.CropPanel
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextBackgroundStyle
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.data.TextElement
-import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.AdConsentDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.dialog.IosExportDialog
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.filter.FilterRow
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.calculateRectForRatio
@@ -123,8 +120,9 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     var selectedTextId by remember { mutableStateOf<String?>(null) }
     var selectedShapeId by remember { mutableStateOf<String?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
-    var showAdConsent by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
+    var isAdLoading by remember { mutableStateOf(false) }
+    var successfulSaveCount by remember { mutableIntStateOf(AppPrefs.getSaveCount(context)) }
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
 
     // --- КАДРИРОВАНИЕ ---
@@ -140,51 +138,72 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
         ?: if (boxSize.height > 0) containerSize.width / containerSize.height else 1f
 
     // --- СОСТОЯНИЕ РЕКЛАМЫ ---
-    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     val adLoader = remember { InterstitialAdLoader(context) }
+    val nativeAdState = rememberEditorNativeAdState(
+        isUnlocked = successfulSaveCount >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS
+    )
 
-    // Нативная реклама под инструментами: грузится один раз на весь экран редактора
-    // и не зависит от выбранной вкладки.
-    val nativeAdState = rememberEditorNativeAdState()
-
-    LaunchedEffect(Unit) {
-        // Межстраничная реклама показывается только начиная с 3-го сохранения,
-        // раньше её незачем и загружать.
-        if (!AppPrefs.shouldPreloadSaveAd(context)) return@LaunchedEffect
-        if (!AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID)) return@LaunchedEffect
-        val adRequest = AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build()
-        adLoader.loadAd(adRequest, object : InterstitialAdLoadListener {
-            override fun onAdLoaded(ad: InterstitialAd) {
-                interstitialAd = ad
+    // Сначала реклама, затем само сохранение. Рекламный запрос выполняется
+    // только по нажатию кнопки и только после двух успешных сохранений.
+    fun startPhotoExport() {
+        isAdLoading = false
+        isExporting = true
+        if (photoUri == null) {
+            isExporting = false
+            showExportDialog = true
+            return
+        }
+        saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
+            isExporting = false
+            if (uri != null) {
+                successfulSaveCount = AppPrefs.registerSuccessfulSave(context)
+                showExportDialog = true
+            } else {
+                showExportDialog = true
             }
-
-            override fun onAdFailedToLoad(error: AdRequestError) {
-                interstitialAd = null
-            }
-        })
+        }
     }
 
-    val showAdAndThenDialog = {
-        if (interstitialAd != null && activity != null) {
-            interstitialAd?.setAdEventListener(object : InterstitialAdEventListener {
-                override fun onAdShown() {}
-
-                override fun onAdFailedToShow(adError: AdError) {
-                    showExportDialog = true
-                }
-
-                override fun onAdDismissed() {
-                    showExportDialog = true
-                }
-
-                override fun onAdClicked() {}
-                override fun onAdImpression(impressionData: ImpressionData?) {}
-            })
-            interstitialAd?.show(activity)
-        } else {
-            // Если реклама не загружена, просто показываем диалог
-            showExportDialog = true
+    fun requestInterstitialThenExport() {
+        if (successfulSaveCount < AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS ||
+            !AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID) || activity == null
+        ) {
+            startPhotoExport()
+            return
         }
+
+        isAdLoading = true
+        adLoader.loadAd(
+            AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build(),
+            object : InterstitialAdLoadListener {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    isAdLoading = false
+                    var continued = false
+                    fun continueExport() {
+                        if (continued) return
+                        continued = true
+                        startPhotoExport()
+                    }
+                    ad.setAdEventListener(object : InterstitialAdEventListener {
+                        override fun onAdShown() {}
+                        override fun onAdFailedToShow(adError: AdError) = continueExport()
+                        override fun onAdDismissed() = continueExport()
+                        override fun onAdClicked() {}
+                        override fun onAdImpression(impressionData: ImpressionData?) {}
+                    })
+                    try {
+                        ad.show(activity)
+                    } catch (_: Exception) {
+                        continueExport()
+                    }
+                }
+
+                override fun onAdFailedToLoad(error: AdRequestError) {
+                    // Не блокируем сохранение, если рекламная сеть недоступна.
+                    startPhotoExport()
+                }
+            }
+        )
     }
 
     // Логика истории
@@ -231,23 +250,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
     Scaffold(
         topBar = {
             EditorTopBar(fileName = fileName, onCancel = onCancel, onExport = {
-                if (photoUri != null && !isExporting) {
-                    isExporting = true
-                    saveEditedImage(context, photoUri, currentSettings, boxSize) { uri ->
-                        isExporting = false
-                        if (uri != null) {
-                            val saves = AppPrefs.registerSuccessfulSave(context)
-                            if (saves >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS && interstitialAd != null) {
-                                // Перед рекламой показываем окно-согласие с крестиком.
-                                // Если объявление не загрузилось (или реклама отключена), окно не нужно.
-                                showAdConsent = true
-                            } else {
-                                // Первые сохранения или нет рекламы — сразу «Готово».
-                                showExportDialog = true
-                            }
-                        }
-                    }
-                }
+                if (!isExporting && !isAdLoading) requestInterstitialThenExport()
             })
         },
         containerColor = Color.Black
@@ -561,21 +564,6 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                 }
             }
 
-            if (showAdConsent) {
-                AdConsentDialog(
-                    onSkip = {
-                        // Крестик / «Пропустить» — рекламу не показываем, сразу к «Готово».
-                        showAdConsent = false
-                        showExportDialog = true
-                    },
-                    onWatch = {
-                        // 3 секунды прошли — показываем рекламу, затем диалог «Готово».
-                        showAdConsent = false
-                        showAdAndThenDialog()
-                    }
-                )
-            }
-
             if (showExportDialog) {
                 IosExportDialog(
                     onDismiss = { showExportDialog = false },
@@ -590,14 +578,21 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                 )
             }
 
-            if (isExporting) {
+            if (isExporting || isAdLoading) {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(0.5f)),
+                        .background(Color.Black.copy(0.65f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = iOSBlue)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = iOSBlue)
+                        Text(
+                            text = if (isAdLoading) stringResource(R.string.loading_ads) else stringResource(R.string.exporting_image),
+                            color = Color.White,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    }
                 }
             }
         }
