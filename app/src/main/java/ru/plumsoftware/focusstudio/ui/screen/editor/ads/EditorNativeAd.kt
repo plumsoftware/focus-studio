@@ -82,14 +82,18 @@ class EditorNativeAdState {
  */
 @Composable
 fun rememberEditorNativeAdState(
+    isUnlocked: Boolean = false,
     adUnitId: String = AdsConfig.NATIVE_ADS_ID
 ): EditorNativeAdState {
     val context = LocalContext.current
     val state = remember { EditorNativeAdState() }
 
-    DisposableEffect(adUnitId) {
-        // Реклама отключена для этого магазина — блок просто не появится.
-        if (!AdsConfig.isEnabled(adUnitId)) return@DisposableEffect onDispose {}
+    DisposableEffect(adUnitId, isUnlocked) {
+        // До двух успешных сохранений нативную рекламу даже не запрашиваем.
+        if (!isUnlocked || !AdsConfig.isEnabled(adUnitId)) {
+            state.adView = null
+            return@DisposableEffect onDispose {}
+        }
         val loader = NativeAdLoader(context)
         loader.loadAd(
             AdRequest.Builder(adUnitId).build(),
