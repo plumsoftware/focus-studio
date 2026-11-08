@@ -11,9 +11,9 @@ object AppPrefs {
      * Сколько успешных сохранений (фото + видео суммарно) нужно сделать,
      * прежде чем включатся полноэкранные объявления: реклама при входе
      * и реклама после сохранения. Первые два сохранения — без рекламы,
-     * третье и все последующие — с рекламой.
+     * начиная с третьего сохранения — реклама разрешена.
      */
-    const val SAVES_BEFORE_FULLSCREEN_ADS = 3
+    const val SAVES_BEFORE_FULLSCREEN_ADS = 2
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -30,13 +30,6 @@ object AppPrefs {
     /** Полноэкранная реклама разрешена, когда набрано нужное число сохранений. */
     fun isFullscreenAdsUnlocked(context: Context): Boolean =
         getSaveCount(context) >= SAVES_BEFORE_FULLSCREEN_ADS
-
-    /**
-     * Стоит ли заранее грузить межстраничную рекламу при открытии редактора:
-     * да, если следующее сохранение уже будет с рекламой.
-     */
-    fun shouldPreloadSaveAd(context: Context): Boolean =
-        getSaveCount(context) + 1 >= SAVES_BEFORE_FULLSCREEN_ADS
 
     /** Реклама при входе — только после [SAVES_BEFORE_FULLSCREEN_ADS] сохранений. */
     fun shouldShowLaunchAd(context: Context): Boolean = isFullscreenAdsUnlocked(context)
