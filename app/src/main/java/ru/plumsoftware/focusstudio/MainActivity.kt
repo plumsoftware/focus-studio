@@ -2,6 +2,7 @@ package ru.plumsoftware.focusstudio
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -22,15 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import ru.plumsoftware.focusstudio.ui.screen.WelcomeScreen
-import ru.plumsoftware.focusstudio.ui.theme.FocusTheme
-import ru.plumsoftware.focusstudio.ui.theme.Routes
-import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
 import com.yandex.mobile.ads.appopenad.AppOpenAd
 import com.yandex.mobile.ads.appopenad.AppOpenAdEventListener
 import com.yandex.mobile.ads.appopenad.AppOpenAdLoadListener
@@ -43,11 +43,24 @@ import kotlinx.coroutines.delay
 import ru.plumsoftware.focusstudio.data.AdsConfig
 import ru.plumsoftware.focusstudio.data.AppPrefs
 import ru.plumsoftware.focusstudio.ui.screen.IosPermissionDialog
+import ru.plumsoftware.focusstudio.ui.screen.WelcomeScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.collage.CollageEditorScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.photo.screen.PhotoEditorScreen
 import ru.plumsoftware.focusstudio.ui.screen.editor.video.screen.VideoEditorScreen
+import ru.plumsoftware.focusstudio.ui.theme.FocusTheme
+import ru.plumsoftware.focusstudio.ui.theme.Routes
 
 class MainActivity : ComponentActivity() {
+
+    private var onReturnFromSettings: (() -> Unit)? = null
+
+    override fun onResume() {
+        super.onResume()
+        onReturnFromSettings?.let { callback ->
+            onReturnFromSettings = null
+            callback()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,75 +73,89 @@ class MainActivity : ComponentActivity() {
             var showPermissionDialog by remember { mutableStateOf(false) }
             val context = LocalContext.current
             val navController = rememberNavController()
-            val shouldShowLaunchAd = remember {
-                AppPrefs.shouldShowLaunchAd(context) && AdsConfig.isEnabled(AdsConfig.OPEN_ADS_ID)
-            }
 
-            // 1. Выносим логику загрузки рекламы в отдельную функцию
+            // Загружаем App Open только после завершения всех системных запросов разрешений.
             val startLoadingAds: () -> Unit = {
-                isAdsLoading = true
-                val appOpenAdLoader = AppOpenAdLoader(application)
-                val adRequest = AdRequest.Builder(AdsConfig.OPEN_ADS_ID).build()
+                val canShowLaunchAd = AppPrefs.shouldShowLaunchAd(context) &&
+                    AdsConfig.isEnabled(AdsConfig.OPEN_ADS_ID)
 
-                val appOpenAdLoadListener = object : AppOpenAdLoadListener {
-                    override fun onAdLoaded(appOpenAd: AppOpenAd) {
-                        isAdsLoading = false
-                        appOpenAd.setAdEventListener(object : AppOpenAdEventListener {
-                            override fun onAdClicked() {}
-                            override fun onAdDismissed() {}
-                            override fun onAdFailedToShow(adError: AdError) {}
-                            override fun onAdImpression(impressionData: ImpressionData?) {}
-                            override fun onAdShown() {}
-                        })
-                        appOpenAd.show(this@MainActivity)
-                    }
+                if (canShowLaunchAd && !isAdsLoading) {
+                    isAdsLoading = true
+                    val loader = AppOpenAdLoader(application)
+                    val request = AdRequest.Builder(AdsConfig.OPEN_ADS_ID).build()
 
-                    override fun onAdFailedToLoad(error: AdRequestError) {
-                        isAdsLoading = false
-                    }
+                    loader.loadAd(request, object : AppOpenAdLoadListener {
+                        override fun onAdLoaded(appOpenAd: AppOpenAd) {
+                            isAdsLoading = false
+                            appOpenAd.setAdEventListener(object : AppOpenAdEventListener {
+                                override fun onAdClicked() {}
+                                override fun onAdDismissed() {}
+                                override fun onAdFailedToShow(adError: AdError) {}
+                                override fun onAdImpression(impressionData: ImpressionData?) {}
+                                override fun onAdShown() {}
+                            })
+
+                            // Не показываем рекламу поверх системного окна или при закрытой Activity.
+                            if (!isFinishing && !isDestroyed &&
+                                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                            ) {
+                                appOpenAd.show(this@MainActivity)
+                            }
+                        }
+
+                        override fun onAdFailedToLoad(error: AdRequestError) {
+                            isAdsLoading = false
+                        }
+                    })
+                } else {
+                    AppPrefs.markFirstLaunchComplete(context)
                 }
-                appOpenAdLoader.loadAd(adRequest, appOpenAdLoadListener)
             }
 
-            // 2. Настраиваем разрешения
             val permissionsToRequest = remember {
-                mutableListOf<String>().apply {
+                buildList {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         add(Manifest.permission.POST_NOTIFICATIONS)
                         add(Manifest.permission.READ_MEDIA_IMAGES)
                         add(Manifest.permission.READ_MEDIA_VIDEO)
                     } else {
                         add(Manifest.permission.READ_EXTERNAL_STORAGE)
-                        add(Manifest.permission.WRITE_EXTERNAL_STORAGE) // Уже есть — ок
+                        add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     }
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                        if (!contains(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-                            add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        }
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE !in this
+                    ) {
+                        add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     }
+                }.filter { permission ->
+                    ContextCompat.checkSelfPermission(context, permission) !=
+                        PackageManager.PERMISSION_GRANTED
                 }.toTypedArray()
             }
 
-            // 3. Лаунчер теперь запускает рекламу ПОСЛЕ закрытия системного окна
+            val finishPermissionFlow: () -> Unit = {
+                startLoadingAds()
+            }
+
             val permissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestMultiplePermissions()
             ) { permissionsMap ->
-                val isAnyDenied = permissionsMap.values.contains(false)
-                if (isAnyDenied) {
+                val hasDeniedPermission = permissionsMap.values.any { granted -> !granted }
+                if (hasDeniedPermission) {
+                    // Не запускаем загрузку рекламы, пока открыто наше окно с объяснением разрешений.
                     showPermissionDialog = true
-                }
-
-                if (shouldShowLaunchAd) {
-                    startLoadingAds()
                 } else {
-                    AppPrefs.markFirstLaunchComplete(context)
+                    finishPermissionFlow()
                 }
             }
 
-            // 4. При старте запускаем ТОЛЬКО запрос разрешений
-            LaunchedEffect(key1 = Unit) {
+            LaunchedEffect(Unit) {
                 delay(300)
-                permissionLauncher.launch(permissionsToRequest)
+                if (permissionsToRequest.isNotEmpty()) {
+                    permissionLauncher.launch(permissionsToRequest)
+                } else {
+                    finishPermissionFlow()
+                }
             }
 
             FocusTheme(darkTheme = false) {
@@ -152,7 +179,8 @@ class MainActivity : ComponentActivity() {
                             val uri = uriString?.let { Uri.decode(it).toUri() }
                             PhotoEditorScreen(
                                 photoUri = uri,
-                                onCancel = { navController.popBackStack() })
+                                onCancel = { navController.popBackStack() }
+                            )
                         }
 
                         composable(
@@ -164,15 +192,14 @@ class MainActivity : ComponentActivity() {
                             }
                             VideoEditorScreen(
                                 videoUri = uri,
-                                onCancel = { navController.popBackStack() })
+                                onCancel = { navController.popBackStack() }
+                            )
                         }
 
                         composable(Routes.COLLAGE_EDITOR) {
                             CollageEditorScreen(
                                 onCancel = { navController.popBackStack() },
                                 onOpenInEditor = { collageUri ->
-                                    // Готовый коллаж — обычное изображение. Открываем его в
-                                    // существующем фоторедакторе (тот же путь сохранения).
                                     val encodedUri = Uri.encode(collageUri.toString())
                                     navController.navigate("${Routes.PHOTO_EDITOR}/$encodedUri") {
                                         popUpTo(Routes.COLLAGE_EDITOR) { inclusive = true }
@@ -182,12 +209,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Диалог Rationale (iOS Style) показывается поверх навигации
                     if (showPermissionDialog) {
                         IosPermissionDialog(
-                            onDismiss = { showPermissionDialog = false },
+                            onDismiss = {
+                                showPermissionDialog = false
+                                finishPermissionFlow()
+                            },
                             onGoToSettings = {
                                 showPermissionDialog = false
+                                // Если пользователь открыл настройки, рекламу загружаем только
+                                // после возвращения в приложение.
+                                onReturnFromSettings = finishPermissionFlow
                                 openAppSettings(context)
                             }
                         )
