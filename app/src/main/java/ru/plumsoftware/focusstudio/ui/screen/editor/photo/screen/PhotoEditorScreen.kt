@@ -76,6 +76,7 @@ import coil.compose.AsyncImage
 import com.yandex.mobile.ads.common.AdRequest
 import com.yandex.mobile.ads.common.AdRequestError
 import com.yandex.mobile.ads.common.ImpressionData
+import com.yandex.mobile.ads.interstitial.InterstitialAd
 import com.yandex.mobile.ads.interstitial.InterstitialAdEventListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoadListener
 import com.yandex.mobile.ads.interstitial.InterstitialAdLoader
@@ -588,7 +589,7 @@ fun PhotoEditorScreen(photoUri: Uri?, onCancel: () -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = iOSBlue)
                         Text(
-                            text = if (isAdLoading) stringResource(R.string.loading_ads) else stringResource(R.string.exporting_image),
+                            text = if (isAdLoading) stringResource(R.string.loading_ads) else "Сохранение фото…",
                             color = Color.White,
                             modifier = Modifier.padding(top = 16.dp)
                         )
