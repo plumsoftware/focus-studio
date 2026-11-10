@@ -155,75 +155,6 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         isUnlocked = successfulSaveCount >= AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS
     )
 
-    // Кодирование и запись в галерею запускаются только после закрытия рекламы.
-    fun startVideoExport() {
-        isAdLoading = false
-        isExporting = true
-        isPlaying = false
-        exoPlayer.stop()
-        exoPlayer.clearMediaItems()
-
-        exportVideo(
-            context = context,
-            displaySize = playerViewSize,
-            settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
-            density = density.density,
-            onResult = { uri ->
-                isExporting = false
-                if (uri != null) {
-                    successfulSaveCount = AppPrefs.registerSuccessfulSave(context)
-                    showExportDialog = true
-                } else {
-                    showExportErrorDialog = true
-                }
-                refreshPlaylist()
-                exoPlayer.playWhenReady = false
-            }
-        )
-    }
-
-    fun requestInterstitialThenExport() {
-        if (successfulSaveCount < AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS ||
-            !AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID) || activity == null
-        ) {
-            startVideoExport()
-            return
-        }
-
-        isAdLoading = true
-        adLoader.loadAd(
-            AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build(),
-            object : InterstitialAdLoadListener {
-                override fun onAdLoaded(ad: com.yandex.mobile.ads.interstitial.InterstitialAd) {
-                    isAdLoading = false
-                    var continued = false
-                    fun continueExport() {
-                        if (continued) return
-                        continued = true
-                        startVideoExport()
-                    }
-                    ad.setAdEventListener(object : InterstitialAdEventListener {
-                        override fun onAdShown() {}
-                        override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) = continueExport()
-                        override fun onAdDismissed() = continueExport()
-                        override fun onAdClicked() {}
-                        override fun onAdImpression(impressionData: ImpressionData?) {}
-                    })
-                    try {
-                        ad.show(activity)
-                    } catch (_: Exception) {
-                        continueExport()
-                    }
-                }
-
-                override fun onAdFailedToLoad(error: AdRequestError) {
-                    // Не блокируем экспорт, если рекламная сеть недоступна.
-                    startVideoExport()
-                }
-            }
-        )
-    }
-
     // Функция обновления настроек (аналогично фото)
     fun updateSettings(newSettings: VideoSettings) {
         settings = newSettings
@@ -336,6 +267,75 @@ fun VideoEditorScreen(videoUri: Uri?, onCancel: () -> Unit) {
         exoPlayer.prepare()
         // Возвращаем плеер на место после обновления
         if (settings.clips.isNotEmpty()) exoPlayer.seekTo(currentIndex, currentMs)
+    }
+
+    // Кодирование и запись в галерею запускаются только после закрытия рекламы.
+    fun startVideoExport() {
+        isAdLoading = false
+        isExporting = true
+        isPlaying = false
+        exoPlayer.stop()
+        exoPlayer.clearMediaItems()
+
+        exportVideo(
+            context = context,
+            displaySize = playerViewSize,
+            settings = settings.copy(selectedFilter = getCombinedMatrixVideo(settings)),
+            density = density.density,
+            onResult = { uri ->
+                isExporting = false
+                if (uri != null) {
+                    successfulSaveCount = AppPrefs.registerSuccessfulSave(context)
+                    showExportDialog = true
+                } else {
+                    showExportErrorDialog = true
+                }
+                refreshPlaylist()
+                exoPlayer.playWhenReady = false
+            }
+        )
+    }
+
+    fun requestInterstitialThenExport() {
+        if (successfulSaveCount < AppPrefs.SAVES_BEFORE_FULLSCREEN_ADS ||
+            !AdsConfig.isEnabled(AdsConfig.INTERSTITIAL_ADS_ID) || activity == null
+        ) {
+            startVideoExport()
+            return
+        }
+
+        isAdLoading = true
+        adLoader.loadAd(
+            AdRequest.Builder(AdsConfig.INTERSTITIAL_ADS_ID).build(),
+            object : InterstitialAdLoadListener {
+                override fun onAdLoaded(ad: com.yandex.mobile.ads.interstitial.InterstitialAd) {
+                    isAdLoading = false
+                    var continued = false
+                    fun continueExport() {
+                        if (continued) return
+                        continued = true
+                        startVideoExport()
+                    }
+                    ad.setAdEventListener(object : InterstitialAdEventListener {
+                        override fun onAdShown() {}
+                        override fun onAdFailedToShow(adError: com.yandex.mobile.ads.common.AdError) = continueExport()
+                        override fun onAdDismissed() = continueExport()
+                        override fun onAdClicked() {}
+                        override fun onAdImpression(impressionData: ImpressionData?) {}
+                    })
+                    try {
+                        ad.show(activity)
+                    } catch (_: Exception) {
+                        continueExport()
+                    }
+                }
+
+                override fun onAdFailedToLoad(error: AdRequestError) {
+                    // Не блокируем экспорт, если рекламная сеть недоступна.
+                    startVideoExport()
+                }
+            }
+        )
     }
 
     // Инициализация первым видео
